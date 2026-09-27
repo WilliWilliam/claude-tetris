@@ -22,7 +22,7 @@ Key conventions that span multiple functions:
 
 - **Cell values are piece types.** `board` is a `ROWS × COLS` matrix of `0` (empty) or `1–7`. The numbers inside each `PIECES` shape matrix are that piece's type, which doubles as the index into `COLORS`. `merge()` copies shape values straight into the board, so adding/reordering pieces requires keeping `PIECES` and `COLORS` indices aligned (and `randomPiece()` hardcodes `* 7`).
 - **`collide(shape, ox, oy)`** is the single source of truth for movement, rotation, gravity, ghost projection (`ghostY`), and game-over detection (a freshly `spawn()`ed piece that already collides triggers `endGame()`). Cells with negative `y` are allowed.
-- **Game loop gotcha:** when a gravity lock inside `loop()` causes game over, `endGame()` cancels the frame but `loop()` then re-schedules itself afterwards — be aware of this when touching loop/game-over logic.
+- **Game loop and game over:** `endGame()` cancels the pending frame, but `loop()` must also stop itself: it bails out early when `gameOver || paused`, and returns without re-scheduling when a gravity lock triggers game over. Otherwise the loop keeps locking the colliding spawn and stacks pieces behind the overlay.
 
 ## Coupled constants
 
