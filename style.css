@@ -83,7 +83,8 @@ body {
   color: var(--title-color);
 }
 
-#theme-toggle {
+#theme-toggle,
+#sound-toggle {
   background: var(--toggle-bg);
   border: 1px solid var(--toggle-border);
   border-radius: 999px;
@@ -121,6 +122,10 @@ body {
   padding-top: 4px;
 }
 
+.panel-left {
+  width: 122px;
+}
+
 .panel-section {
   display: flex;
   flex-direction: column;
@@ -142,11 +147,34 @@ body {
   letter-spacing: 1px;
 }
 
-#next-canvas {
+#next-canvas,
+#hold-canvas {
   display: block;
   border: 1px solid var(--board-border);
   background: var(--board-bg);
   border-radius: 4px;
+}
+
+#hold-canvas {
+  transition: opacity 0.15s;
+}
+
+#hold-canvas.locked {
+  opacity: 0.35;
+}
+
+#combo.pulse {
+  animation: combo-pulse 0.35s ease-out;
+}
+
+@keyframes combo-pulse {
+  0%   { transform: scale(1.5); color: #ffd54f; }
+  100% { transform: scale(1); }
+}
+
+#combo {
+  display: inline-block;
+  transform-origin: left center;
 }
 
 /* ---- Controles ---- */
