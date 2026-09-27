@@ -35,6 +35,13 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 
 - Tablero de **10 × 20** celdas.
 - Las **7 piezas estándar** (I, O, T, S, Z, J, L) con colores diferenciados.
+- **Piezas no estándar** que aparecen ocasionalmente: pentominós `+`, `U` e `Y` (~8 %) y un reto `3×3` hueco (~3 %). Tras cada **Tetris**, la siguiente pieza es un bloque `1×1` de recompensa.
+- **Power-ups**: cada 8 líneas llega un bloque especial `1×1` que se mueve como una pieza y, al fijarse, activa su efecto en ese punto (no queda en el tablero):
+  - 💣 **Bomba** — destruye el área 3×3 alrededor.
+  - ⚡ **Rayo** — limpia su fila y su columna completas.
+  - 🎨 **Tinte** — elimina todos los bloques del color sobre el que cae (o del más abundante) y compacta el tablero.
+  - 🧲 **Gravedad** — hace caer todos los bloques y rellena los huecos.
+  - ❄️ **Congelar** — detiene la caída automática durante 5 s (la pausa no consume el tiempo).
 - **Rotación** con _wall kicks_ básicos (pequeños desplazamientos para que la pieza pueda rotar pegada a la pared).
 - **Soft drop** (bajada acelerada) y **hard drop** (caída instantánea).
 - **Pieza fantasma** (_ghost piece_): muestra dónde aterrizará la pieza actual.
@@ -96,7 +103,7 @@ Después abre `http://localhost:8000` en el navegador.
 
 ## Cómo funciona
 
-El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `game.js`.
+El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `game.js`.
 
 ### 1. `index.html`
 
@@ -110,16 +117,17 @@ Define la estructura visual:
 
 Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada para los marcadores y _backdrop blur_ en los overlays. Los colores se definen como variables CSS (`--bg`, `--board-bg`, `--grid-color`, etc.) con dos paletas —`[data-theme="dark"]` (por defecto) y `[data-theme="light"]`— que se alternan con el botón de tema.
 
-### 3. `pieces.js`, `audio.js` y `scoring.js`
+### 3. `pieces.js`, `audio.js`, `scoring.js` y `powerups.js`
 
-- **`pieces.js`**: constantes del tablero (`COLS`, `ROWS`, `BLOCK`), `COLORS`, `PIECES`, `createPiece(type)` y `randomPiece()`.
+- **`pieces.js`**: constantes del tablero (`COLS`, `ROWS`, `BLOCK`), `COLORS`, `PIECES` (tipos 1–7 estándar, 8–12 especiales, 13 power-up), `POWERUPS`, `createPiece(type, power)`, `randomPiece()` y `randomPowerUp()`.
+- **`powerups.js`**: efectos puros sobre la matriz del tablero (`bombEffect`, `rayEffect`, `tintEffect`, `compactColumns`) y `applyPowerUp()`.
 - **`audio.js`**: efectos de sonido sintetizados con la Web Audio API (sin archivos de audio). El `AudioContext` se crea con la primera tecla o clic; el silencio se guarda en `localStorage`.
 - **`scoring.js`**: función pura `evaluateClear()` que calcula puntos, combo, B2B y las etiquetas a mostrar:
   - Líneas: `[0, 100, 300, 500, 800]`; T-spin: `[400, 800, 1200, 1600]` (0–3 líneas).
   - B2B: Tetris o T-spin con líneas tras otro igual → ×1.5.
   - Combo: multiplicador igual al número de colocaciones seguidas que limpian líneas.
   - Perfect Clear: bonus `[0, 800, 1200, 1800, 2000]`.
-  - Todo se multiplica por el nivel que había antes de la limpieza.
+  - Todo se multiplica por el nivel que había antes de la limpieza. Las limpiezas de más de 4 líneas (posibles con power-ups) puntúan como un Tetris.
 
 ### 4. `game.js`
 
@@ -181,6 +189,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── pieces.js       # Tablero, piezas y colores
 ├── audio.js        # Efectos de sonido (Web Audio)
 ├── scoring.js      # Puntuación: combos, T-spin, B2B, Perfect Clear
+├── powerups.js     # Efectos de los power-ups sobre el tablero
 ├── game.js         # Estado, bucle, entrada y dibujado
 └── README.md
 ```

@@ -19,18 +19,20 @@ function evaluateClear({ cleared, tspin, perfect, combo, b2b, level }) {
     return { points, combo: 0, b2b, labels };
   }
 
-  const difficult = cleared === 4 || tspin;
+  // Power-ups (gravity, tint) can clear more than 4 lines at once: score them as a Tetris.
+  const n = Math.min(cleared, 4);
+  const difficult = n === 4 || tspin;
   const isB2B = difficult && b2b;
   const newCombo = combo + 1;
 
-  let base = tspin ? (TSPIN_SCORES[cleared] || 0) : (LINE_SCORES[cleared] || 0);
+  let base = tspin ? (TSPIN_SCORES[n] || 0) : LINE_SCORES[n];
   if (isB2B) base *= B2B_MULT;
   base *= Math.max(1, newCombo);
-  const pc = perfect ? (PC_BONUS[cleared] || 0) : 0;
+  const pc = perfect ? PC_BONUS[n] : 0;
   const points = Math.round((base + pc) * level);
 
-  if (tspin) labels.push(`T-SPIN ${CLEAR_NAMES[cleared]}`);
-  else if (cleared === 4) labels.push('TETRIS');
+  if (tspin) labels.push(`T-SPIN ${CLEAR_NAMES[n]}`);
+  else if (n === 4) labels.push('TETRIS');
   if (isB2B) labels.push('B2B');
   if (newCombo >= 2) labels.push(`COMBO x${newCombo}`);
   if (perfect) labels.push('PERFECT CLEAR');

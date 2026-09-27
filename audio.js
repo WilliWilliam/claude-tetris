@@ -47,5 +47,14 @@ const sfx = {
   tspin()    { playChord([587, 740, 880], 0.25, 'sawtooth', 0.05); },
   b2b()      { playTone(1175, 0.15, 'square', 0.15); },
   perfect()  { [523, 659, 784, 1047, 1319].forEach((f, i) => playTone(f, 0.18, 'triangle', 0.2 + i * 0.08, 0.07)); },
+  power(kind) {
+    switch (kind) {
+      case 'bomb':    playTone(80, 0.35, 'sawtooth', 0, 0.12); playTone(55, 0.4, 'square', 0.03, 0.08); break;
+      case 'ray':     [1760, 1320, 880, 440].forEach((f, i) => playTone(f, 0.08, 'sawtooth', i * 0.04, 0.05)); break;
+      case 'tint':    [523, 784, 1047].forEach((f, i) => playTone(f, 0.12, 'sine', i * 0.06)); break;
+      case 'gravity': [440, 330, 220, 165].forEach((f, i) => playTone(f, 0.1, 'triangle', i * 0.05, 0.08)); break;
+      case 'freeze':  playChord([1319, 1568, 1976], 0.4, 'sine'); break;
+    }
+  },
   gameOver() { [392, 330, 262, 196].forEach((f, i) => playTone(f, 0.25, 'sawtooth', i * 0.18, 0.06)); },
 };
