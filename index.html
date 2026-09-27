@@ -7,8 +7,14 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <script>
+    document.body.dataset.theme = localStorage.getItem('tetris-theme') || 'dark';
+  </script>
   <div class="wrapper">
-    <h1 class="game-title">TETRIS</h1>
+    <div class="header-row">
+      <h1 class="game-title">TETRIS</h1>
+      <button id="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar entre modo claro y oscuro">🌙</button>
+    </div>
     <div class="game-container">
       <canvas id="board" width="300" height="600"></canvas>
 
