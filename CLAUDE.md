@@ -18,18 +18,11 @@ There is no test suite; verify changes by playing the game in a browser.
 
 ## Architecture
 
-Three files: `index.html` (DOM, two canvases, HUD, overlay), `style.css` (dark/retro theme), and `game.js` (all logic, loaded as a classic non-module script with `'use strict'`).
-
-`game.js` uses module-level mutable globals (`board`, `current`, `next`, `score`, `lines`, `level`, `paused`, `gameOver`, `dropInterval`, `animId`, …) that `init()` resets; the restart button just calls `init()`.
-
 Key conventions that span multiple functions:
 
 - **Cell values are piece types.** `board` is a `ROWS × COLS` matrix of `0` (empty) or `1–7`. The numbers inside each `PIECES` shape matrix are that piece's type, which doubles as the index into `COLORS`. `merge()` copies shape values straight into the board, so adding/reordering pieces requires keeping `PIECES` and `COLORS` indices aligned (and `randomPiece()` hardcodes `* 7`).
-- **Pieces** are `{ type, shape, x, y }`; `shape` is a square matrix rotated by `rotateCW` (transpose + reverse). `tryRotate` applies simple horizontal wall kicks `[0, -1, 1, -2, 2]` — not SRS.
 - **`collide(shape, ox, oy)`** is the single source of truth for movement, rotation, gravity, ghost projection (`ghostY`), and game-over detection (a freshly `spawn()`ed piece that already collides triggers `endGame()`). Cells with negative `y` are allowed.
-- **Lock sequence:** `lockPiece()` → `merge()` → `clearLines()` (updates lines, score, level, and `dropInterval = max(100, 1000 − (level−1)·90)`) → `spawn()`.
-- **Game loop:** `loop()` runs on `requestAnimationFrame`, accumulates `dt` into `dropAccum`, and drops one row per `dropInterval`. Pause/game-over stop it via `cancelAnimationFrame(animId)`. Note: when a gravity lock inside `loop()` causes game over, `endGame()` cancels the frame but `loop()` then re-schedules itself afterwards — be aware of this when touching loop/game-over logic.
-- **Rendering** is full redraw each frame (`draw()`: grid → board → ghost at `alpha 0.2` → current piece) via the shared `drawBlock(context, x, y, colorIndex, size, alpha)`, also used by `drawNext()` for the 4×4 preview canvas.
+- **Game loop gotcha:** when a gravity lock inside `loop()` causes game over, `endGame()` cancels the frame but `loop()` then re-schedules itself afterwards — be aware of this when touching loop/game-over logic.
 
 ## Coupled constants
 
