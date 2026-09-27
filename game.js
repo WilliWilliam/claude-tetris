@@ -450,8 +450,9 @@ document.addEventListener('keydown', e => {
 });
 
 restartBtn.addEventListener('click', () => { ensureAudio(); init(); });
-themeToggleBtn.addEventListener('click', toggleTheme);
-soundToggleBtn.addEventListener('click', toggleSound);
+// blur so a focused button doesn't also react to Space (hard drop)
+themeToggleBtn.addEventListener('click', () => { toggleTheme(); themeToggleBtn.blur(); });
+soundToggleBtn.addEventListener('click', () => { toggleSound(); soundToggleBtn.blur(); });
 themeToggleBtn.textContent = document.body.dataset.theme === 'light' ? '☀️' : '🌙';
 updateSoundButton();
 

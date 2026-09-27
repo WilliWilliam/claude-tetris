@@ -118,7 +118,7 @@ body {
   width: 160px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   padding-top: 4px;
 }
 
