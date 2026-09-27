@@ -29,3 +29,7 @@ Key conventions that span multiple functions:
 If you change `COLS`, `ROWS`, or `BLOCK` in `game.js`, update the `<canvas id="board">` `width`/`height` in `index.html` to `COLS × BLOCK` by `ROWS × BLOCK`. The `#next-canvas` (120×120) assumes a 4×4 grid of 30px cells (`NB` in `drawNext`).
 
 Controls are documented both in `index.html` (side panel) and `README.md`; keep them in sync with the `keydown` handler.
+
+## CI
+
+GitHub Actions in `.github/workflows/` all use `anthropics/claude-code-action@v1` with the `CLAUDE_CODE_OAUTH_TOKEN` secret: `claude.yml` (`@claude` mentions), `claude-code-review.yml` (PR review), and `claude-issue-triage.yml` (on issue opened/edited, Claude writes `triage/labels.txt` + `triage/diagnosis.md`; a shell step applies only labels in `ALLOWED_LABELS` and upserts a single comment marked `<!-- claude-triage -->`). New labels must be added to `ALLOWED_LABELS` and created in the repo.
