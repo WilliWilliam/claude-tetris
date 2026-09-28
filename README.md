@@ -66,6 +66,11 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
   - **Rotación inversa** — desde el nivel 3 el giro pasa a antihorario; llega al nivel 5.
 - **Pausa** y **Game Over** con opción de reinicio.
 - **Modo claro / oscuro**: botón para alternar el tema visual, con el modo oscuro como valor por defecto y la preferencia guardada entre sesiones.
+- **Skins visuales**: selector en la cabecera que cambia la apariencia de los bloques al instante, sin recargar, y se recuerda entre sesiones:
+  - **Retro** — bloques cuadrados y colores planos (el estilo original, por defecto).
+  - **Neon** — fondo negro y bloques con brillo (_glow_).
+  - **Pastel** — colores suaves y bloques con bordes redondeados.
+  - **Pixel art** — textura de píxeles con biselado sobre cada bloque.
 
 ---
 
@@ -117,7 +122,7 @@ Después abre `http://localhost:8000` en el navegador.
 
 ## Cómo funciona
 
-El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `game.js`.
+El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `skins.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `game.js`.
 
 ### 1. `index.html`
 
@@ -134,6 +139,7 @@ Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada
 ### 3. `pieces.js`, `audio.js`, `scoring.js` y `powerups.js`
 
 - **`pieces.js`**: constantes del tablero (`COLS`, `ROWS`, `BLOCK`), `COLORS`, `PIECES` (tipos 1–7 estándar, 8–12 especiales, 13 power-up), `POWERUPS`, `createPiece(type, power)`, `randomPiece()` y `randomPowerUp()`.
+- **`skins.js`**: `SKINS` (retro, neon, pastel, pixel), cada una con su nombre, su paleta `colors` (alineada con los índices de `COLORS`) y su función `draw` para un bloque; `loadSkin()`/`saveSkin()` leen y guardan la preferencia en `localStorage` (`tetris-skin`).
 - **`modes.js`**: configuración de los modos (`MODES`) y funciones puras: `checkGoal`, `goalText`, `prefillBoard`, `pushGarbage`, `countGarbage`.
 - **`abilities.js`**: constantes de energía y la lista `ABILITIES` (los efectos viven en `game.js` porque tocan el estado de la partida).
 - **`powerups.js`**: efectos puros sobre la matriz del tablero (`bombEffect`, `rayEffect`, `tintEffect`, `compactColumns`) y `applyPowerUp()`.
@@ -203,6 +209,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── index.html      # Estructura del DOM y canvas
 ├── style.css       # Estilos del juego (dark theme)
 ├── pieces.js       # Tablero, piezas y colores
+├── skins.js        # Skins visuales: paletas y estilo de bloque
 ├── audio.js        # Efectos de sonido (Web Audio)
 ├── scoring.js      # Puntuación: combos, T-spin, B2B, Perfect Clear
 ├── powerups.js     # Efectos de los power-ups sobre el tablero
@@ -226,6 +233,8 @@ Algunos parámetros fáciles de tunear en `pieces.js`, `scoring.js` y `game.js`:
 | `COLORS`       | Paleta de colores por tipo de pieza      | 7 colores             |
 | `LINE_SCORES`  | Puntos por 1, 2, 3 o 4 líneas eliminadas | `[0,100,300,500,800]` |
 | `dropInterval` | Velocidad inicial de caída en ms         | `1000`                |
+
+Para añadir una **skin**, agrega una entrada a `SKINS` en `skins.js` con `name`, `colors` (15 entradas, mismo orden que `COLORS`) y `draw(context, px, py, size, color)`. Si quieres otro fondo o rejilla para el tablero, añade una regla `body[data-skin="…"]` en `style.css` que redefina `--board-bg` y `--grid-color`; si no, se usan los del tema claro/oscuro.
 
 > Si cambias `COLS`, `ROWS` o `BLOCK`, recuerda ajustar también `width` y `height` del `<canvas id="board">` en `index.html` para que coincida (`COLS × BLOCK` × `ROWS × BLOCK`).
 
