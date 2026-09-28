@@ -1,11 +1,13 @@
 'use strict';
 
-// Depends on pieces.js, audio.js, scoring.js and powerups.js (loaded first by index.html).
+// Depends on pieces.js, audio.js, scoring.js, powerups.js, modes.js and
+// abilities.js (loaded first by index.html).
 
 const POPUP_MS = 1200;
 const FLASH_MS = 600;
 const FREEZE_MS = 5000;
 const POWERUP_EVERY = 8; // lines
+const QUEUE_SIZE = 5;
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -13,22 +15,36 @@ const nextCanvas = document.getElementById('next-canvas');
 const nextCtx = nextCanvas.getContext('2d');
 const holdCanvas = document.getElementById('hold-canvas');
 const holdCtx = holdCanvas.getContext('2d');
+const queueCanvas = document.getElementById('queue-canvas');
+const queueCtx = queueCanvas.getContext('2d');
+const queueSection = document.getElementById('queue-section');
 const scoreEl = document.getElementById('score');
 const linesEl = document.getElementById('lines');
 const levelEl = document.getElementById('level');
 const comboEl = document.getElementById('combo');
+const energySection = document.getElementById('energy-section');
+const energyFill = document.getElementById('energy-fill');
+const modeLabelEl = document.getElementById('mode-label');
+const goalEl = document.getElementById('goal-text');
 const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
+const modeBtn = document.getElementById('mode-btn');
+const modeMenu = document.getElementById('mode-menu');
+const modeList = document.getElementById('mode-list');
+const abilityMenu = document.getElementById('ability-menu');
+const abilityList = document.getElementById('ability-list');
 const themeToggleBtn = document.getElementById('theme-toggle');
 const soundToggleBtn = document.getElementById('sound-toggle');
 
 const THEME_KEY = 'tetris-theme';
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, combo, b2b, lastMoveRotate, popups, flashUntil;
 let nextPowerAt, pendingPower, pendingSingle, freezeUntil, pausedAt;
+let mode = 'classic', elapsed, garbageAccum, energy, slowUntil, previewUntil, snapshot;
+let modeMenuOpen = false, abilityMenuOpen = false;
 let gridColor;
 
 function readGridColor() {
@@ -89,8 +105,17 @@ function rotateCW(shape) {
   return result;
 }
 
+function rotateCCW(shape) {
+  return rotateCW(rotateCW(rotateCW(shape)));
+}
+
+function inverseRotation() {
+  const from = MODES[mode].inverseFromLevel;
+  return !!from && level >= from;
+}
+
 function tryRotate() {
-  const rotated = rotateCW(current.shape);
+  const rotated = inverseRotation() ? rotateCCW(current.shape) : rotateCW(current.shape);
   const kicks = [0, -1, 1, -2, 2];
   for (const kick of kicks) {
     if (!collide(rotated, current.x + kick, current.y)) {
@@ -173,7 +198,34 @@ function softDrop() {
   }
 }
 
+// Everything the "undo" ability needs to rewind one placement.
+function takeSnapshot() {
+  const spec = p => ({ type: p.type, power: p.power });
+  snapshot = {
+    board: board.map(row => [...row]),
+    score, lines, level, dropInterval, combo, b2b,
+    hold: hold && { ...hold }, holdUsed,
+    piece: spec(current),
+    queue: queue.map(spec),
+    nextPowerAt, pendingPower, pendingSingle,
+  };
+}
+
+function restoreSnapshot() {
+  const s = snapshot;
+  snapshot = null;
+  board = s.board;
+  ({ score, lines, level, dropInterval, combo, b2b, holdUsed, nextPowerAt, pendingPower, pendingSingle } = s);
+  hold = s.hold;
+  queue = s.queue.map(p => createPiece(p.type, p.power));
+  current = createPiece(s.piece.type, s.piece.power);
+  lastMoveRotate = false;
+  drawNext();
+  drawHold();
+}
+
 function lockPiece() {
+  takeSnapshot();
   const tspin = isTSpin();
   const lvl = level;
   const prevCombo = combo;
@@ -202,12 +254,16 @@ function lockPiece() {
     pendingPower = true;
     nextPowerAt += POWERUP_EVERY;
   }
+  chargeEnergy(cleared);
+  const inverseFrom = MODES[mode].inverseFromLevel;
+  if (inverseFrom && lvl < inverseFrom && level >= inverseFrom) showPopups(['🔃 ROTACIÓN INVERSA']);
 
   holdUsed = false;
   lastMoveRotate = false;
   drawHold();
   updateHUD();
   spawn();
+  checkGoalNow();
 }
 
 function playLockSfx(cleared, tspin, perfect, isB2B, wasPower) {
@@ -236,20 +292,103 @@ function holdPiece() {
   drawHold();
 }
 
+// Power-ups jump the queue ahead of the single-block reward; both are flagged by lockPiece().
 function spawn() {
-  current = next;
-  next = nextPiece();
+  current = queue.shift();
+  if (pendingPower) { pendingPower = false; queue.unshift(randomPowerUp()); }
+  else if (pendingSingle) { pendingSingle = false; queue.unshift(createPiece(SINGLE_TYPE)); }
+  while (queue.length < QUEUE_SIZE) queue.push(randomPiece());
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
   drawNext();
 }
 
-// Power-ups take priority over the single-block reward; both are queued by lockPiece().
-function nextPiece() {
-  if (pendingPower) { pendingPower = false; return randomPowerUp(); }
-  if (pendingSingle) { pendingSingle = false; return createPiece(SINGLE_TYPE); }
-  return randomPiece();
+// ---- Energy & abilities ----
+
+function chargeEnergy(cleared) {
+  if (!cleared || energy >= ENERGY_MAX) return;
+  energy = Math.min(ENERGY_MAX, energy + cleared * ENERGY_PER_LINE);
+  if (energy >= ENERGY_MAX) {
+    showPopups(['⚡ ENERGÍA LISTA · E']);
+    sfx.b2b();
+  }
+}
+
+function openAbilityMenu() {
+  if (energy < ENERGY_MAX || paused || gameOver) return;
+  paused = true;
+  suspend();
+  abilityMenuOpen = true;
+  abilityList.replaceChildren(...ABILITIES.map((a, i) =>
+    menuButton(i + 1, `${a.icon} ${a.name}`, a.desc, () => chooseAbility(i), a.id === 'undo' && !snapshot)));
+  abilityMenu.classList.remove('hidden');
+}
+
+function closeAbilityMenu() {
+  abilityMenu.classList.add('hidden');
+  abilityMenuOpen = false;
+  paused = false;
+  resume();
+}
+
+function chooseAbility(i) {
+  const ability = ABILITIES[i];
+  if (!ability || (ability.id === 'undo' && !snapshot)) return;
+  closeAbilityMenu();
+  energy = 0;
+  useAbility(ability.id);
+  showPopups([`${ability.icon} ${ability.name.toUpperCase()}`]);
+  sfx.hold();
+  updateHUD();
+}
+
+function useAbility(id) {
+  const now = performance.now();
+  switch (id) {
+    case 'preview':
+      previewUntil = now + PREVIEW_MS;
+      drawNext();
+      break;
+    case 'swap': {
+      const types = [];
+      for (let t = 1; t <= STANDARD_COUNT; t++) if (t !== current.type) types.push(t);
+      const piece = createPiece(types[Math.floor(Math.random() * types.length)]);
+      // Keep the current position when it fits, otherwise fall back to the spawn position.
+      if (!collide(piece.shape, current.x, current.y)) { piece.x = current.x; piece.y = current.y; }
+      if (!collide(piece.shape, piece.x, piece.y)) current = piece;
+      lastMoveRotate = false;
+      break;
+    }
+    case 'slow':
+      slowUntil = now + SLOW_MS;
+      break;
+    case 'undo':
+      restoreSnapshot();
+      break;
+  }
+}
+
+// ---- Modes & goals ----
+
+function stats() {
+  return { lines, level, elapsed, garbageLeft: countGarbage(board) };
+}
+
+function checkGoalNow() {
+  if (gameOver) return;
+  const status = checkGoal(mode, stats());
+  if (status === 'win') endGame('¡OBJETIVO CUMPLIDO!', true);
+  else if (status === 'lose') endGame('TIEMPO AGOTADO');
+}
+
+function addGarbage() {
+  snapshot = null; // undo must not rewind past the rising garbage
+  if (!pushGarbage(board)) { endGame(); return; }
+  if (collide(current.shape, current.x, current.y)) {
+    if (!collide(current.shape, current.x, current.y - 1)) current.y--;
+    else endGame();
+  }
 }
 
 function updateHUD() {
@@ -257,6 +396,14 @@ function updateHUD() {
   linesEl.textContent = lines;
   levelEl.textContent = level;
   comboEl.textContent = combo >= 2 ? `x${combo}` : '—';
+  energyFill.style.width = `${(energy / ENERGY_MAX) * 100}%`;
+  energySection.classList.toggle('full', energy >= ENERGY_MAX);
+  updateGoal();
+}
+
+function updateGoal() {
+  const text = goalText(mode, stats());
+  if (goalEl.textContent !== text) goalEl.textContent = text;
 }
 
 function pulse(el) {
@@ -269,6 +416,8 @@ function showPopups(labels) {
   const now = performance.now();
   labels.forEach((text, i) => popups.push({ text, t0: now + i * 120 }));
 }
+
+// ---- Drawing ----
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
@@ -332,15 +481,35 @@ function drawPopups(now) {
   ctx.restore();
 }
 
+// Countdown badges for timed effects, stacked in the top-right corner.
+function drawTimers(now) {
+  const timers = [
+    [freezeUntil, '❄️', '#64b5f6'],
+    [slowUntil, '🐢', '#81c784'],
+    [previewUntil, '👁️', '#ba68c8'],
+  ].filter(([until]) => now < until);
+  if (!timers.length) return;
+  ctx.save();
+  ctx.font = 'bold 16px system-ui, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  timers.forEach(([until, icon, color], i) => {
+    ctx.fillStyle = color;
+    ctx.fillText(`${icon} ${Math.ceil((until - now) / 1000)}s`, canvas.width - 8, 8 + i * 22);
+  });
+  ctx.restore();
+}
+
 function draw() {
   const now = performance.now();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
-  // board
-  for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      drawBlock(ctx, c, r, board[r][c], BLOCK);
+  // board (hidden in the invisible challenge until the game ends)
+  if (!MODES[mode].invisible || gameOver)
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++)
+        drawBlock(ctx, c, r, board[r][c], BLOCK);
 
   // ghost
   const gy = ghostY();
@@ -359,18 +528,11 @@ function draw() {
     drawPowerIcon(ctx, current.x, current.y, BLOCK, current.power);
   }
 
-  // freeze tint + countdown
   if (now < freezeUntil) {
     ctx.fillStyle = 'rgba(100,180,255,0.12)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.save();
-    ctx.font = 'bold 16px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = '#64b5f6';
-    ctx.fillText(`❄️ ${Math.ceil((freezeUntil - now) / 1000)}s`, canvas.width - 8, 8);
-    ctx.restore();
   }
+  drawTimers(now);
 
   // perfect clear flash
   if (now < flashUntil) {
@@ -381,50 +543,74 @@ function draw() {
   drawPopups(now);
 }
 
-// piece: anything with { type, power } (a live piece or a hold entry), or null.
-function drawPreview(context, canvasEl, piece) {
-  const NB = 30;
-  context.clearRect(0, 0, canvasEl.width, canvasEl.height);
-  if (!piece) return;
+// piece: anything with { type, power } (a live piece or a hold entry).
+// Draws it centred in a 4×4 cell box whose top row is `row0`.
+function drawPreview(context, piece, size, row0 = 0) {
   const shape = PIECES[piece.type];
   const offX = Math.floor((4 - shape[0].length) / 2);
-  const offY = Math.floor((4 - shape.length) / 2);
+  const offY = row0 + Math.floor((4 - shape.length) / 2);
   for (let r = 0; r < shape.length; r++)
     for (let c = 0; c < shape[r].length; c++)
-      drawBlock(context, offX + c, offY + r, shape[r][c], NB);
-  if (piece.power) drawPowerIcon(context, offX, offY, NB, piece.power);
+      drawBlock(context, offX + c, offY + r, shape[r][c], size);
+  if (piece.power) drawPowerIcon(context, offX, offY, size, piece.power);
 }
 
 function drawNext() {
-  drawPreview(nextCtx, nextCanvas, next);
+  nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+  drawPreview(nextCtx, queue[0], 30);
+  const showQueue = performance.now() < previewUntil;
+  queueSection.classList.toggle('hidden', !showQueue);
+  if (showQueue) {
+    queueCtx.clearRect(0, 0, queueCanvas.width, queueCanvas.height);
+    for (let i = 1; i < QUEUE_SIZE; i++) drawPreview(queueCtx, queue[i], 15, (i - 1) * 4);
+  }
 }
 
 function drawHold() {
-  drawPreview(holdCtx, holdCanvas, hold);
+  holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+  if (hold) drawPreview(holdCtx, hold, 30);
   holdCanvas.classList.toggle('locked', holdUsed);
 }
 
-function endGame() {
+// ---- Game flow ----
+
+function endGame(title = 'GAME OVER', won = false) {
   gameOver = true;
   cancelAnimationFrame(animId);
-  sfx.gameOver();
-  overlayTitle.textContent = 'GAME OVER';
-  overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
+  won ? sfx.perfect() : sfx.gameOver();
+  overlayTitle.textContent = title;
+  overlayTitle.classList.toggle('win', won);
+  const time = mode === 'classic' ? '' : ` · Tiempo ${formatTime(elapsed)}`;
+  overlayScore.textContent = `Puntuación: ${score.toLocaleString()}${time}`;
   overlay.classList.remove('hidden');
 }
 
+function suspend() {
+  cancelAnimationFrame(animId);
+  pausedAt = performance.now();
+}
+
+// Timed effects don't run down while the game is suspended.
+function resume() {
+  const now = performance.now();
+  const gap = now - pausedAt;
+  if (freezeUntil > pausedAt) freezeUntil += gap;
+  if (slowUntil > pausedAt) slowUntil += gap;
+  if (previewUntil > pausedAt) previewUntil += gap;
+  lastTime = now;
+  loop(now);
+}
+
 function togglePause() {
-  if (gameOver) return;
+  if (gameOver || abilityMenuOpen) return;
   paused = !paused;
   if (!paused) {
     overlay.classList.add('hidden');
-    lastTime = performance.now();
-    if (freezeUntil > pausedAt) freezeUntil += lastTime - pausedAt; // pause doesn't eat the freeze
-    loop(lastTime);
+    resume();
   } else {
-    cancelAnimationFrame(animId);
-    pausedAt = performance.now();
+    suspend();
     overlayTitle.textContent = 'PAUSA';
+    overlayTitle.classList.remove('win');
     overlayScore.textContent = '';
     overlay.classList.remove('hidden');
   }
@@ -432,10 +618,24 @@ function togglePause() {
 
 function loop(ts) {
   if (gameOver || paused) return;
+  const now = performance.now();
   const dt = ts - lastTime;
   lastTime = ts;
-  dropAccum = performance.now() < freezeUntil ? 0 : dropAccum + dt;
-  if (dropAccum >= dropInterval) {
+  elapsed += dt;
+
+  const every = MODES[mode].garbageEvery;
+  if (every) {
+    garbageAccum += dt;
+    if (garbageAccum >= every) {
+      garbageAccum -= every;
+      addGarbage();
+      if (gameOver) { draw(); return; }
+    }
+  }
+
+  const interval = dropInterval * (now < slowUntil ? SLOW_FACTOR : 1);
+  dropAccum = now < freezeUntil ? 0 : dropAccum + dt;
+  if (dropAccum >= interval) {
     dropAccum = 0;
     if (!collide(current.shape, current.x, current.y + 1)) {
       current.y++;
@@ -445,6 +645,11 @@ function loop(ts) {
       if (gameOver) { draw(); return; }
     }
   }
+
+  checkGoalNow();
+  if (gameOver) { draw(); return; }
+  if (!queueSection.classList.contains('hidden') && now >= previewUntil) drawNext();
+  updateGoal();
   draw();
   animId = requestAnimationFrame(loop);
 }
@@ -452,6 +657,7 @@ function loop(ts) {
 function init() {
   readGridColor();
   board = createBoard();
+  if (MODES[mode].prefillRows) prefillBoard(board, MODES[mode].prefillRows);
   score = 0;
   lines = 0;
   level = 1;
@@ -463,26 +669,83 @@ function init() {
   popups = [];
   flashUntil = 0;
   freezeUntil = 0;
+  slowUntil = 0;
+  previewUntil = 0;
   pausedAt = 0;
   nextPowerAt = POWERUP_EVERY;
   pendingPower = false;
   pendingSingle = false;
+  energy = 0;
+  snapshot = null;
+  elapsed = 0;
+  garbageAccum = 0;
   paused = false;
   gameOver = false;
   dropInterval = 1000;
   dropAccum = 0;
   lastTime = performance.now();
-  next = randomPiece();
+  queue = Array.from({ length: QUEUE_SIZE }, () => randomPiece());
   spawn();
   drawHold();
+  modeLabelEl.textContent = MODES[mode].name.toUpperCase();
   updateHUD();
   overlay.classList.add('hidden');
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
+// ---- Menus ----
+
+function menuButton(n, title, desc, onClick, disabled = false) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'menu-btn';
+  btn.disabled = disabled;
+  const kbd = document.createElement('kbd');
+  kbd.textContent = n;
+  const strong = document.createElement('strong');
+  strong.textContent = title;
+  const small = document.createElement('small');
+  small.textContent = desc;
+  btn.append(kbd, strong, small);
+  btn.addEventListener('click', () => { ensureAudio(); btn.blur(); onClick(); });
+  return btn;
+}
+
+function showModeMenu() {
+  overlay.classList.add('hidden');
+  modeMenuOpen = true;
+  modeMenu.classList.remove('hidden');
+}
+
+function selectMode(id) {
+  mode = id;
+  modeMenuOpen = false;
+  modeMenu.classList.add('hidden');
+  init();
+}
+
+modeList.append(...MODE_IDS.map((id, i) =>
+  menuButton(i + 1, MODES[id].name, MODES[id].desc, () => selectMode(id))));
+
+function digitIndex(code) {
+  const m = /^(?:Digit|Numpad)([1-9])$/.exec(code);
+  return m ? Number(m[1]) - 1 : -1;
+}
+
 document.addEventListener('keydown', e => {
   ensureAudio();
+  if (modeMenuOpen) {
+    const i = digitIndex(e.code);
+    if (i >= 0 && i < MODE_IDS.length) selectMode(MODE_IDS[i]);
+    return;
+  }
+  if (abilityMenuOpen) {
+    const i = digitIndex(e.code);
+    if (i >= 0) chooseAbility(i);
+    else if (e.code === 'Escape' || e.code === 'KeyE') closeAbilityMenu();
+    return;
+  }
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
@@ -508,15 +771,19 @@ document.addEventListener('keydown', e => {
     case 'ShiftRight':
       holdPiece();
       break;
+    case 'KeyE':
+      openAbilityMenu();
+      return;
   }
   updateHUD();
 });
 
-restartBtn.addEventListener('click', () => { ensureAudio(); init(); });
+restartBtn.addEventListener('click', () => { ensureAudio(); restartBtn.blur(); init(); });
+modeBtn.addEventListener('click', () => { modeBtn.blur(); showModeMenu(); });
 // blur so a focused button doesn't also react to Space (hard drop)
 themeToggleBtn.addEventListener('click', () => { toggleTheme(); themeToggleBtn.blur(); });
 soundToggleBtn.addEventListener('click', () => { toggleSound(); soundToggleBtn.blur(); });
 themeToggleBtn.textContent = document.body.dataset.theme === 'light' ? '☀️' : '🌙';
 updateSoundButton();
 
-init();
+showModeMenu();

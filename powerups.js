@@ -29,11 +29,13 @@ function rayEffect(board, x, y) {
 }
 
 // Target colour: block below, then left, then right; else the most common colour.
+// Garbage is never a target, so tint can't wipe a challenge board in one go.
 function tintTarget(board, x, y) {
+  const isColour = v => v && v !== GARBAGE_TYPE;
   for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0]])
-    if (inBounds(board, x + dx, y + dy) && board[y + dy][x + dx]) return board[y + dy][x + dx];
+    if (inBounds(board, x + dx, y + dy) && isColour(board[y + dy][x + dx])) return board[y + dy][x + dx];
   const counts = {};
-  for (const row of board) for (const v of row) if (v) counts[v] = (counts[v] || 0) + 1;
+  for (const row of board) for (const v of row) if (isColour(v)) counts[v] = (counts[v] || 0) + 1;
   let best = 0, bestCount = 0;
   for (const [v, n] of Object.entries(counts)) if (n > bestCount) { best = Number(v); bestCount = n; }
   return best;

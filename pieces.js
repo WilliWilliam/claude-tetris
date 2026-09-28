@@ -19,6 +19,7 @@ const COLORS = [
   '#90a4ae', // single - blue grey
   '#a1887f', // hollow 3×3 - brown
   '#b0bec5', // power-up (never merged into the board)
+  '#757575', // garbage / fixed challenge blocks (board-only, no PIECES entry)
 ];
 
 const PIECES = [
@@ -44,6 +45,7 @@ const PENTOMINO_TYPES = [8, 9, 10];
 const SINGLE_TYPE = 11;
 const HOLLOW_TYPE = 12;
 const POWER_TYPE = 13;
+const GARBAGE_TYPE = 14;
 
 const PENTOMINO_CHANCE = 0.08;
 const HOLLOW_CHANCE = 0.03;

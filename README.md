@@ -52,6 +52,18 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **T-spin**, **Back-to-Back** (Tetris o T-spin seguidos, ×1.5) y **Perfect Clear** (dejar el tablero vacío) con bonus.
 - **Efectos**: textos flotantes sobre el tablero, destello en Perfect Clear y **sonido sintetizado** (Web Audio) con botón para silenciarlo.
 - **Niveles** que aumentan cada 10 líneas y aceleran la caída.
+- **Energía y habilidades**: cada línea limpiada carga 10 puntos de energía (máx. 100). Con la barra llena, `E` abre un menú (el juego se pausa) para elegir con `1`–`4`:
+  - 👁️ **Ver 5 piezas** — muestra las próximas 5 piezas durante 30 s.
+  - 🔄 **Cambiar pieza** — cambia la pieza actual por otra estándar distinta.
+  - 🐢 **Ralentizar** — la caída va a mitad de velocidad durante 10 s.
+  - ↩️ **Deshacer** — deshace la última colocación (solo una vez; la basura que sube la anula).
+- **Modos de juego** (se eligen al empezar o con «Cambiar modo» tras la partida):
+  - **Clásico** — juego libre.
+  - **Sprint 40** — limpia 40 líneas en 2 minutos.
+  - **Basura** — sobrevive 2 minutos mientras sube una fila de basura cada 10 s.
+  - **Bloques fijos** — el tablero empieza con bloques grises; elimínalos todos.
+  - **Invisible** — las piezas desaparecen al fijarse; limpia 20 líneas (el tablero se revela al terminar).
+  - **Rotación inversa** — desde el nivel 3 el giro pasa a antihorario; llega al nivel 5.
 - **Pausa** y **Game Over** con opción de reinicio.
 - **Modo claro / oscuro**: botón para alternar el tema visual, con el modo oscuro como valor por defecto y la preferencia guardada entre sesiones.
 
@@ -97,13 +109,15 @@ Después abre `http://localhost:8000` en el navegador.
 | `↓`       | Soft drop (bajar más rápido)      |
 | `Espacio` | Hard drop (caída instantánea)     |
 | `C` / `Shift` | Reservar pieza (hold)         |
+| `E`       | Usar habilidad (energía llena)    |
+| `1`–`6`   | Elegir opción en los menús        |
 | `P`       | Pausar / reanudar                 |
 
 ---
 
 ## Cómo funciona
 
-El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `game.js`.
+El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `game.js`.
 
 ### 1. `index.html`
 
@@ -120,6 +134,8 @@ Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada
 ### 3. `pieces.js`, `audio.js`, `scoring.js` y `powerups.js`
 
 - **`pieces.js`**: constantes del tablero (`COLS`, `ROWS`, `BLOCK`), `COLORS`, `PIECES` (tipos 1–7 estándar, 8–12 especiales, 13 power-up), `POWERUPS`, `createPiece(type, power)`, `randomPiece()` y `randomPowerUp()`.
+- **`modes.js`**: configuración de los modos (`MODES`) y funciones puras: `checkGoal`, `goalText`, `prefillBoard`, `pushGarbage`, `countGarbage`.
+- **`abilities.js`**: constantes de energía y la lista `ABILITIES` (los efectos viven en `game.js` porque tocan el estado de la partida).
 - **`powerups.js`**: efectos puros sobre la matriz del tablero (`bombEffect`, `rayEffect`, `tintEffect`, `compactColumns`) y `applyPowerUp()`.
 - **`audio.js`**: efectos de sonido sintetizados con la Web Audio API (sin archivos de audio). El `AudioContext` se crea con la primera tecla o clic; el silencio se guarda en `localStorage`.
 - **`scoring.js`**: función pura `evaluateClear()` que calcula puntos, combo, B2B y las etiquetas a mostrar:
@@ -190,6 +206,8 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── audio.js        # Efectos de sonido (Web Audio)
 ├── scoring.js      # Puntuación: combos, T-spin, B2B, Perfect Clear
 ├── powerups.js     # Efectos de los power-ups sobre el tablero
+├── modes.js        # Modos desafío: objetivos, basura, bloques fijos
+├── abilities.js    # Energía y lista de habilidades
 ├── game.js         # Estado, bucle, entrada y dibujado
 └── README.md
 ```
