@@ -65,6 +65,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
   - **Invisible** — las piezas desaparecen al fijarse; limpia 20 líneas (el tablero se revela al terminar).
   - **Rotación inversa** — desde el nivel 3 el giro pasa a antihorario; llega al nivel 5.
 - **Pausa** y **Game Over** con opción de reinicio.
+- **Tabla de récords local** (`localStorage`): top 5 puntuaciones con nombre del jugador (máx. 12 caracteres; «Anónimo» si se deja vacío), líneas y modo. Al terminar la partida, si la puntuación entra en el top aparece un campo para escribir el nombre y la fila nueva queda resaltada. También se guardan el **mejor combo** y las **líneas máximas** de cualquier partida. La tabla se muestra en la pantalla de inicio y en la de Game Over, con un botón «Borrar records» (pide confirmación).
 - **Modo claro / oscuro**: botón para alternar el tema visual, con el modo oscuro como valor por defecto y la preferencia guardada entre sesiones.
 
 ---
@@ -117,7 +118,7 @@ Después abre `http://localhost:8000` en el navegador.
 
 ## Cómo funciona
 
-El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `game.js`.
+El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `records.js` → `game.js`.
 
 ### 1. `index.html`
 
@@ -125,7 +126,8 @@ Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
 - Un panel izquierdo con el slot `HOLD` y un panel derecho con `SCORE`, `LINES`, `LEVEL`, `COMBO`, vista de la siguiente pieza y la lista de controles.
-- Un overlay para los estados **PAUSA** y **GAME OVER**.
+- Un overlay para los estados **PAUSA** y **GAME OVER** (este último con el formulario de nombre y la tabla de récords).
+- El menú de inicio (elegir modo) con la tabla de récords.
 
 ### 2. `style.css`
 
@@ -136,6 +138,7 @@ Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada
 - **`pieces.js`**: constantes del tablero (`COLS`, `ROWS`, `BLOCK`), `COLORS`, `PIECES` (tipos 1–7 estándar, 8–12 especiales, 13 power-up), `POWERUPS`, `createPiece(type, power)`, `randomPiece()` y `randomPowerUp()`.
 - **`modes.js`**: configuración de los modos (`MODES`) y funciones puras: `checkGoal`, `goalText`, `prefillBoard`, `pushGarbage`, `countGarbage`.
 - **`abilities.js`**: constantes de energía y la lista `ABILITIES` (los efectos viven en `game.js` porque tocan el estado de la partida).
+- **`records.js`**: funciones puras para la tabla de récords (`loadRecords`, `saveRecords`, `clearRecords`, `recordRank`/`qualifies`, `insertRecord`, `updateBests`); todo acceso a `localStorage` va envuelto en `try/catch`.
 - **`powerups.js`**: efectos puros sobre la matriz del tablero (`bombEffect`, `rayEffect`, `tintEffect`, `compactColumns`) y `applyPowerUp()`.
 - **`audio.js`**: efectos de sonido sintetizados con la Web Audio API (sin archivos de audio). El `AudioContext` se crea con la primera tecla o clic; el silencio se guarda en `localStorage`.
 - **`scoring.js`**: función pura `evaluateClear()` que calcula puntos, combo, B2B y las etiquetas a mostrar:
@@ -208,6 +211,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── powerups.js     # Efectos de los power-ups sobre el tablero
 ├── modes.js        # Modos desafío: objetivos, basura, bloques fijos
 ├── abilities.js    # Energía y lista de habilidades
+├── records.js      # Tabla de récords local (localStorage)
 ├── game.js         # Estado, bucle, entrada y dibujado
 └── README.md
 ```

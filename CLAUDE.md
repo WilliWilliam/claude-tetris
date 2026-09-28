@@ -18,7 +18,7 @@ There is no test suite; verify changes by playing the game in a browser.
 
 ## Architecture
 
-Classic `<script>` files (no ES modules, so `file://` still works) loaded in order by `index.html`, sharing the global scope: `pieces.js` (board constants, `COLORS`, `PIECES`, `createPiece`/`randomPiece`) → `audio.js` (Web Audio `sfx`, lazy `AudioContext`, `muted`) → `scoring.js` (pure `evaluateClear`, no DOM — testable with Node `vm`) → `powerups.js` (pure board effects, mutate the board passed in) → `modes.js` (`MODES` config + pure goal/garbage helpers) → `abilities.js` (energy constants + `ABILITIES` list) → `game.js` (state, loop, input, drawing).
+Classic `<script>` files (no ES modules, so `file://` still works) loaded in order by `index.html`, sharing the global scope: `pieces.js` (board constants, `COLORS`, `PIECES`, `createPiece`/`randomPiece`) → `audio.js` (Web Audio `sfx`, lazy `AudioContext`, `muted`) → `scoring.js` (pure `evaluateClear`, no DOM — testable with Node `vm`) → `powerups.js` (pure board effects, mutate the board passed in) → `modes.js` (`MODES` config + pure goal/garbage helpers) → `abilities.js` (energy constants + `ABILITIES` list) → `records.js` (pure local high-score helpers over `localStorage` key `tetris-records`, every access in try/catch — testable with Node `vm`) → `game.js` (state, loop, input, drawing).
 
 Key conventions that span multiple functions:
 
@@ -33,6 +33,7 @@ Key conventions that span multiple functions:
 - **Undo:** `lockPiece()` calls `takeSnapshot()` first (board copy, score/lines/level, hold, queue as `{type, power}` specs…); `restoreSnapshot()` rebuilds pieces with `createPiece()`. Rising garbage clears the snapshot. Energy is not part of the snapshot.
 - **Garbage cells** are `GARBAGE_TYPE` (14): a `COLORS` entry with no `PIECES` entry. Tint never targets them.
 - **Hold:** `hold` stores `{ type, power }` (not a bare type) so power-ups survive a hold. `holdUsed` is reset in `lockPiece()`, not `spawn()`, because `holdPiece()` also calls `spawn()`. A piece out of hold is rebuilt with `createPiece()` (spawn position/rotation).
+- **Records:** `tetris-records` stores `{ top: [{name, score, lines, mode, date}] (max `RECORDS_MAX`, desc), bestCombo, maxLines }`. `maxCombo` is tracked per run in `lockPiece()`. `endGame()` (guarded against running twice) calls `showEndRecords()`: best combo / max lines are saved immediately; if `recordRank()` ≥ 0 (score > 0, ties go below) it sets `pendingRecord` and shows the name form, which `submitRecord()` saves (also called from `init()`/`showModeMenu()` so leaving the screen keeps the score). The keydown handler ignores events whose target is an `<input>`. `togglePause()` reuses `#overlay`, so it calls `hideEndRecords()`. Names are rendered only via `textContent`.
 - **T-spin flag:** `lastMoveRotate` is set by a successful rotation and cleared by any lateral move, gravity/soft-drop step, or a hard drop that descends ≥1 row.
 
 ## Coupled constants

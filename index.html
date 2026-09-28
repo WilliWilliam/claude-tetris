@@ -87,6 +87,12 @@
       <div class="overlay-box">
         <p id="overlay-title">GAME OVER</p>
         <p id="overlay-score"></p>
+        <p id="record-msg" class="record-msg hidden"></p>
+        <form id="record-form" class="record-form hidden">
+          <input id="record-name" type="text" maxlength="12" placeholder="Tu nombre" autocomplete="off" spellcheck="false" aria-label="Nombre para la tabla de récords" />
+          <button type="submit" id="record-save" class="btn">Guardar</button>
+        </form>
+        <div id="over-records" class="records hidden"></div>
         <button id="restart-btn" class="btn">Reiniciar</button>
         <button id="mode-btn" class="btn secondary">Cambiar modo</button>
       </div>
@@ -96,6 +102,7 @@
       <div class="overlay-box menu-box">
         <p class="menu-title">ELIGE MODO</p>
         <div id="mode-list" class="menu-list"></div>
+        <div id="menu-records" class="records"></div>
       </div>
     </div>
 
@@ -114,6 +121,7 @@
   <script src="powerups.js"></script>
   <script src="modes.js"></script>
   <script src="abilities.js"></script>
+  <script src="records.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
