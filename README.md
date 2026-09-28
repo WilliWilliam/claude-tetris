@@ -35,12 +35,35 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 
 - Tablero de **10 × 20** celdas.
 - Las **7 piezas estándar** (I, O, T, S, Z, J, L) con colores diferenciados.
+- **Piezas no estándar** que aparecen ocasionalmente: pentominós `+`, `U` e `Y` (~8 %) y un reto `3×3` hueco (~3 %). Tras cada **Tetris**, la siguiente pieza es un bloque `1×1` de recompensa.
+- **Power-ups**: cada 8 líneas llega un bloque especial `1×1` que se mueve como una pieza y, al fijarse, activa su efecto en ese punto (no queda en el tablero):
+  - 💣 **Bomba** — destruye el área 3×3 alrededor.
+  - ⚡ **Rayo** — limpia su fila y su columna completas.
+  - 🎨 **Tinte** — elimina todos los bloques del color sobre el que cae (o del más abundante) y compacta el tablero.
+  - 🧲 **Gravedad** — hace caer todos los bloques y rellena los huecos.
+  - ❄️ **Congelar** — detiene la caída automática durante 5 s (la pausa no consume el tiempo).
 - **Rotación** con _wall kicks_ básicos (pequeños desplazamientos para que la pieza pueda rotar pegada a la pared).
 - **Soft drop** (bajada acelerada) y **hard drop** (caída instantánea).
 - **Pieza fantasma** (_ghost piece_): muestra dónde aterrizará la pieza actual.
 - **Vista previa** de la siguiente pieza.
 - **Sistema de puntuación** clásico de Tetris (100 / 300 / 500 / 800 multiplicado por nivel).
+- **Hold (reservar pieza)**: guarda la pieza actual con `C` o `Shift` y recupérala más tarde; solo se puede usar una vez por pieza (el slot se atenúa mientras está bloqueado).
+- **Combos**: limpiar líneas en colocaciones consecutivas multiplica la puntuación (x2, x3, x4…).
+- **T-spin**, **Back-to-Back** (Tetris o T-spin seguidos, ×1.5) y **Perfect Clear** (dejar el tablero vacío) con bonus.
+- **Efectos**: textos flotantes sobre el tablero, destello en Perfect Clear y **sonido sintetizado** (Web Audio) con botón para silenciarlo.
 - **Niveles** que aumentan cada 10 líneas y aceleran la caída.
+- **Energía y habilidades**: cada línea limpiada carga 10 puntos de energía (máx. 100). Con la barra llena, `E` abre un menú (el juego se pausa) para elegir con `1`–`4`:
+  - 👁️ **Ver 5 piezas** — muestra las próximas 5 piezas durante 30 s.
+  - 🔄 **Cambiar pieza** — cambia la pieza actual por otra estándar distinta.
+  - 🐢 **Ralentizar** — la caída va a mitad de velocidad durante 10 s.
+  - ↩️ **Deshacer** — deshace la última colocación (solo una vez; la basura que sube la anula).
+- **Modos de juego** (se eligen al empezar o con «Cambiar modo» tras la partida):
+  - **Clásico** — juego libre.
+  - **Sprint 40** — limpia 40 líneas en 2 minutos.
+  - **Basura** — sobrevive 2 minutos mientras sube una fila de basura cada 10 s.
+  - **Bloques fijos** — el tablero empieza con bloques grises; elimínalos todos.
+  - **Invisible** — las piezas desaparecen al fijarse; limpia 20 líneas (el tablero se revela al terminar).
+  - **Rotación inversa** — desde el nivel 3 el giro pasa a antihorario; llega al nivel 5.
 - **Pausa** y **Game Over** con opción de reinicio.
 - **Modo claro / oscuro**: botón para alternar el tema visual, con el modo oscuro como valor por defecto y la preferencia guardada entre sesiones.
 
@@ -85,29 +108,46 @@ Después abre `http://localhost:8000` en el navegador.
 | `↑` o `X` | Rotar la pieza en sentido horario |
 | `↓`       | Soft drop (bajar más rápido)      |
 | `Espacio` | Hard drop (caída instantánea)     |
+| `C` / `Shift` | Reservar pieza (hold)         |
+| `E`       | Usar habilidad (energía llena)    |
+| `1`–`6`   | Elegir opción en los menús        |
 | `P`       | Pausar / reanudar                 |
 
 ---
 
 ## Cómo funciona
 
-El juego se compone de tres archivos que cooperan:
+El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `game.js`.
 
 ### 1. `index.html`
 
 Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
-- Un panel lateral con `SCORE`, `LINES`, `LEVEL`, vista de la siguiente pieza y la lista de controles.
+- Un panel izquierdo con el slot `HOLD` y un panel derecho con `SCORE`, `LINES`, `LEVEL`, `COMBO`, vista de la siguiente pieza y la lista de controles.
 - Un overlay para los estados **PAUSA** y **GAME OVER**.
 
 ### 2. `style.css`
 
 Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada para los marcadores y _backdrop blur_ en los overlays. Los colores se definen como variables CSS (`--bg`, `--board-bg`, `--grid-color`, etc.) con dos paletas —`[data-theme="dark"]` (por defecto) y `[data-theme="light"]`— que se alternan con el botón de tema.
 
-### 3. `game.js`
+### 3. `pieces.js`, `audio.js`, `scoring.js` y `powerups.js`
 
-Contiene toda la lógica del juego. A grandes rasgos:
+- **`pieces.js`**: constantes del tablero (`COLS`, `ROWS`, `BLOCK`), `COLORS`, `PIECES` (tipos 1–7 estándar, 8–12 especiales, 13 power-up), `POWERUPS`, `createPiece(type, power)`, `randomPiece()` y `randomPowerUp()`.
+- **`modes.js`**: configuración de los modos (`MODES`) y funciones puras: `checkGoal`, `goalText`, `prefillBoard`, `pushGarbage`, `countGarbage`.
+- **`abilities.js`**: constantes de energía y la lista `ABILITIES` (los efectos viven en `game.js` porque tocan el estado de la partida).
+- **`powerups.js`**: efectos puros sobre la matriz del tablero (`bombEffect`, `rayEffect`, `tintEffect`, `compactColumns`) y `applyPowerUp()`.
+- **`audio.js`**: efectos de sonido sintetizados con la Web Audio API (sin archivos de audio). El `AudioContext` se crea con la primera tecla o clic; el silencio se guarda en `localStorage`.
+- **`scoring.js`**: función pura `evaluateClear()` que calcula puntos, combo, B2B y las etiquetas a mostrar:
+  - Líneas: `[0, 100, 300, 500, 800]`; T-spin: `[400, 800, 1200, 1600]` (0–3 líneas).
+  - B2B: Tetris o T-spin con líneas tras otro igual → ×1.5.
+  - Combo: multiplicador igual al número de colocaciones seguidas que limpian líneas.
+  - Perfect Clear: bonus `[0, 800, 1200, 1800, 2000]`.
+  - Todo se multiplica por el nivel que había antes de la limpieza. Las limpiezas de más de 4 líneas (posibles con power-ups) puntúan como un Tetris.
+
+### 4. `game.js`
+
+Contiene el estado, el bucle, la entrada y el dibujado. A grandes rasgos:
 
 - **Modelo del tablero**: una matriz `ROWS × COLS` donde cada celda guarda `0` (vacía) o un índice de color (1–7) que identifica la pieza.
 - **Piezas**: definidas como matrices cuadradas. Para rotar se calcula la transposición + reverso de filas (`rotateCW`).
@@ -118,6 +158,8 @@ Contiene toda la lógica del juego. A grandes rasgos:
 - **Puntuación**: usa la tabla clásica `[0, 100, 300, 500, 800]` multiplicada por el nivel actual; el hard drop suma 2 puntos por celda recorrida y el soft drop 1 punto por fila.
 - **Nivel y velocidad**: el nivel sube cada 10 líneas; la velocidad de caída se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
 - **Ghost piece** (`ghostY`): proyecta la posición final de la pieza actual hacia abajo y la dibuja con `globalAlpha = 0.2`.
+- **Hold** (`holdPiece`): guarda la pieza actual o la intercambia con la reservada (que reaparece en su posición inicial); se desbloquea al fijar la pieza.
+- **T-spin** (`isTSpin`): regla de las 3 esquinas; la T debe fijarse justo después de una rotación (mover o bajar anula el giro).
 
 ### Flujo del juego
 
@@ -134,7 +176,7 @@ init()
      ├─ draw()  (grid + tablero + ghost + pieza actual)
      └─ requestAnimationFrame(loop)
 
-   keydown → mover / rotar / soft-drop / hard-drop / pausa
+   keydown → mover / rotar / soft-drop / hard-drop / hold / pausa
 ```
 
 Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara `endGame()` y se muestra el overlay de **Game Over**.
@@ -143,11 +185,12 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 
 ## Tecnologías
 
-- **HTML5** — marcado y dos elementos `<canvas>` (tablero y vista previa).
+- **HTML5** — marcado y tres elementos `<canvas>` (tablero, hold y vista previa).
 - **CSS3** — _flexbox_, variables de color, `backdrop-filter` y `box-shadow`.
 - **JavaScript (ES6+) vanilla** — `const`/`let`, _arrow functions_, _spread operator_, `Array.from`, _template literals_…
 - **Canvas 2D API** — para todo el renderizado del juego.
 - **`requestAnimationFrame`** — para el bucle de juego sincronizado con el navegador.
+- **Web Audio API** — para los efectos de sonido generados por código.
 
 **Sin dependencias.** No hay `package.json`, ni bundler, ni transpilador.
 
@@ -159,7 +202,13 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 03-tetris/
 ├── index.html      # Estructura del DOM y canvas
 ├── style.css       # Estilos del juego (dark theme)
-├── game.js         # Toda la lógica del Tetris (~300 líneas)
+├── pieces.js       # Tablero, piezas y colores
+├── audio.js        # Efectos de sonido (Web Audio)
+├── scoring.js      # Puntuación: combos, T-spin, B2B, Perfect Clear
+├── powerups.js     # Efectos de los power-ups sobre el tablero
+├── modes.js        # Modos desafío: objetivos, basura, bloques fijos
+├── abilities.js    # Energía y lista de habilidades
+├── game.js         # Estado, bucle, entrada y dibujado
 └── README.md
 ```
 
@@ -167,7 +216,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 
 ## Personalización
 
-Algunos parámetros fáciles de tunear en `game.js`:
+Algunos parámetros fáciles de tunear en `pieces.js`, `scoring.js` y `game.js`:
 
 | Constante      | Significado                              | Por defecto           |
 | -------------- | ---------------------------------------- | --------------------- |
