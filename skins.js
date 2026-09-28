@@ -149,10 +149,15 @@ const SKINS = {
 
 const SKIN_ORDER = Object.keys(SKINS);
 
+// own keys only: 'constructor', 'toString'… must not count as skins
+function isSkin(id) {
+  return SKIN_ORDER.includes(id);
+}
+
 function loadSkin() {
   try {
     const saved = localStorage.getItem(SKIN_KEY);
-    return SKINS[saved] ? saved : DEFAULT_SKIN;
+    return isSkin(saved) ? saved : DEFAULT_SKIN;
   } catch {
     return DEFAULT_SKIN;
   }

@@ -70,7 +70,7 @@ function redrawAll() {
 
 // Skin: sets data-skin (CSS may override board bg / grid) and redraws.
 function applySkin(id) {
-  skin = SKINS[id] ? id : DEFAULT_SKIN;
+  skin = isSkin(id) ? id : DEFAULT_SKIN;
   document.body.dataset.skin = skin;
   skinSelect.value = skin;
   saveSkin(skin);
