@@ -66,6 +66,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
   - **Rotación inversa** — desde el nivel 3 el giro pasa a antihorario; llega al nivel 5.
 - **Menú de pausa** (`P` o `Esc`): **Reanudar**, **Reiniciar** (nueva partida en el mismo modo, sin recargar la página), **Ver controles** y **Nivel inicial** (1–10, con `←`/`→` o los botones `−`/`+`; se guarda entre sesiones y se aplica en la próxima partida, salvo en los modos con nivel objetivo). Mientras el menú está abierto el juego ignora las teclas de juego y, al volver, descarta durante un instante las teclas que sigan pulsadas para evitar movimientos accidentales.
 - **Game Over** con opción de reinicio.
+- **Tabla de récords local** (`localStorage`): top 5 puntuaciones con nombre del jugador (máx. 12 caracteres; «Anónimo» si se deja vacío), líneas y modo. Al terminar la partida, si la puntuación entra en el top aparece un campo para escribir el nombre y la fila nueva queda resaltada. También se guardan el **mejor combo** y las **líneas máximas** de cualquier partida. La tabla se muestra en la pantalla de inicio y en la de Game Over, con un botón «Borrar records» (pide confirmación).
 - **Modo claro / oscuro**: botón para alternar el tema visual, con el modo oscuro como valor por defecto y la preferencia guardada entre sesiones.
 - **Skins visuales**: selector en la cabecera que cambia la apariencia de los bloques al instante, sin recargar, y se recuerda entre sesiones:
   - **Retro** — bloques cuadrados y colores planos (el estilo original, por defecto).
@@ -124,7 +125,7 @@ Después abre `http://localhost:8000` en el navegador.
 
 ## Cómo funciona
 
-El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `skins.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `game.js`.
+El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `skins.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `records.js` → `game.js`.
 
 ### 1. `index.html`
 
@@ -132,7 +133,8 @@ Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
 - Un panel izquierdo con el slot `HOLD` y un panel derecho con `SCORE`, `LINES`, `LEVEL`, `COMBO`, vista de la siguiente pieza y la lista de controles.
-- Un overlay para **GAME OVER** y menús superpuestos para elegir modo, habilidad y el **menú de pausa**.
+- Un overlay para **GAME OVER** (con el formulario de nombre y la tabla de récords) y menús superpuestos para elegir modo, habilidad y el **menú de pausa**.
+- El menú de inicio (elegir modo) con la tabla de récords.
 
 ### 2. `style.css`
 
@@ -144,6 +146,7 @@ Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada
 - **`skins.js`**: `SKINS` (retro, neon, pastel, pixel), cada una con su nombre, su paleta `colors` (alineada con los índices de `COLORS`) y su función `draw` para un bloque; `loadSkin()`/`saveSkin()` leen y guardan la preferencia en `localStorage` (`tetris-skin`).
 - **`modes.js`**: configuración de los modos (`MODES`) y funciones puras: `checkGoal`, `goalText`, `prefillBoard`, `pushGarbage`, `countGarbage`.
 - **`abilities.js`**: constantes de energía y la lista `ABILITIES` (los efectos viven en `game.js` porque tocan el estado de la partida).
+- **`records.js`**: funciones puras para la tabla de récords (`loadRecords`, `saveRecords`, `clearRecords`, `recordRank`/`qualifies`, `insertRecord`, `updateBests`); todo acceso a `localStorage` va envuelto en `try/catch`.
 - **`powerups.js`**: efectos puros sobre la matriz del tablero (`bombEffect`, `rayEffect`, `tintEffect`, `compactColumns`) y `applyPowerUp()`.
 - **`audio.js`**: efectos de sonido sintetizados con la Web Audio API (sin archivos de audio). El `AudioContext` se crea con la primera tecla o clic; el silencio se guarda en `localStorage`.
 - **`scoring.js`**: función pura `evaluateClear()` que calcula puntos, combo, B2B y las etiquetas a mostrar:
@@ -217,6 +220,7 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── powerups.js     # Efectos de los power-ups sobre el tablero
 ├── modes.js        # Modos desafío: objetivos, basura, bloques fijos
 ├── abilities.js    # Energía y lista de habilidades
+├── records.js      # Tabla de récords local (localStorage)
 ├── game.js         # Estado, bucle, entrada y dibujado
 └── README.md
 ```
