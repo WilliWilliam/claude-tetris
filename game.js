@@ -8,6 +8,8 @@ const FLASH_MS = 600;
 const FREEZE_MS = 5000;
 const POWERUP_EVERY = 8; // lines
 const QUEUE_SIZE = 5;
+const MAX_START_LEVEL = 10;
+const RESUME_GUARD_MS = 200; // gameplay keys ignored right after leaving the pause menu
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -35,16 +37,24 @@ const modeMenu = document.getElementById('mode-menu');
 const modeList = document.getElementById('mode-list');
 const abilityMenu = document.getElementById('ability-menu');
 const abilityList = document.getElementById('ability-list');
+const pauseMenu = document.getElementById('pause-menu');
+const pauseList = document.getElementById('pause-list');
+const pauseControls = document.getElementById('pause-controls');
 const themeToggleBtn = document.getElementById('theme-toggle');
 const soundToggleBtn = document.getElementById('sound-toggle');
 
 const THEME_KEY = 'tetris-theme';
+const START_LEVEL_KEY = 'tetris-start-level';
 
 let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, combo, b2b, lastMoveRotate, popups, flashUntil;
 let nextPowerAt, pendingPower, pendingSingle, freezeUntil, pausedAt;
 let mode = 'classic', elapsed, garbageAccum, energy, slowUntil, previewUntil, snapshot;
-let modeMenuOpen = false, abilityMenuOpen = false;
+let modeMenuOpen = false, abilityMenuOpen = false, pauseMenuOpen = false;
+let startLevel = loadStartLevel(), baseLevel = 1;
+let inputBlockedUntil = 0;
+const heldKeys = new Set(), staleKeys = new Set();
+let levelValueEl, levelDescEl;
 let gridColor;
 
 function readGridColor() {
@@ -77,6 +87,22 @@ function toggleSound() {
   ensureAudio();
   setMuted(!muted);
   updateSoundButton();
+}
+
+function loadStartLevel() {
+  try {
+    const n = parseInt(localStorage.getItem(START_LEVEL_KEY), 10);
+    if (n >= 1 && n <= MAX_START_LEVEL) return n;
+  } catch (e) { /* storage unavailable */ }
+  return 1;
+}
+
+function saveStartLevel() {
+  try { localStorage.setItem(START_LEVEL_KEY, String(startLevel)); } catch (e) { /* storage unavailable */ }
+}
+
+function dropIntervalFor(lvl) {
+  return Math.max(100, 1000 - (lvl - 1) * 90);
 }
 
 function createBoard() {
@@ -167,8 +193,8 @@ function clearLines() {
   }
   if (cleared) {
     lines += cleared;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = Math.max(baseLevel, Math.floor(lines / 10) + 1);
+    dropInterval = dropIntervalFor(level);
   }
   return cleared;
 }
@@ -335,6 +361,7 @@ function closeAbilityMenu() {
   abilityMenu.classList.add('hidden');
   abilityMenuOpen = false;
   paused = false;
+  guardHeldKeys();
   resume();
 }
 
@@ -608,18 +635,124 @@ function resume() {
   loop(now);
 }
 
-function togglePause() {
-  if (gameOver || abilityMenuOpen) return;
-  paused = !paused;
-  if (!paused) {
-    overlay.classList.add('hidden');
-    resume();
-  } else {
-    suspend();
-    overlayTitle.textContent = 'PAUSA';
-    overlayTitle.classList.remove('win');
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
+// ---- Pause menu ----
+
+function openPauseMenu() {
+  if (paused || gameOver || modeMenuOpen || abilityMenuOpen) return;
+  paused = true;
+  suspend();
+  pauseMenuOpen = true;
+  pauseControls.classList.add('hidden');
+  renderPauseMenu();
+  pauseMenu.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  pauseMenu.classList.add('hidden');
+  pauseMenuOpen = false;
+  guardHeldKeys();
+}
+
+// Keys still held from a menu must not act on the game once it resumes.
+function guardHeldKeys() {
+  inputBlockedUntil = performance.now() + RESUME_GUARD_MS;
+  staleKeys.clear();
+  heldKeys.forEach(k => staleKeys.add(k));
+}
+
+function resumeFromPause() {
+  closePauseMenu();
+  paused = false;
+  resume();
+}
+
+function restartFromPause() {
+  init(); // closes the pause menu
+}
+
+function toggleControls() {
+  pauseControls.classList.toggle('hidden');
+}
+
+function changeStartLevel(delta) {
+  startLevel = Math.min(MAX_START_LEVEL, Math.max(1, startLevel + delta));
+  saveStartLevel();
+  updateLevelSelector();
+}
+
+function updateLevelSelector() {
+  levelValueEl.textContent = startLevel;
+  levelDescEl.textContent = MODES[mode].targetLevel
+    ? 'No se aplica en este modo'
+    : 'Se aplica en la próxima partida';
+}
+
+function levelSelector() {
+  const row = document.createElement('div');
+  row.className = 'menu-btn level-row';
+  const kbd = document.createElement('kbd');
+  kbd.textContent = '4';
+  const strong = document.createElement('strong');
+  strong.textContent = 'Nivel inicial';
+  levelDescEl = document.createElement('small');
+  const stepper = document.createElement('div');
+  stepper.className = 'level-stepper';
+  const stepBtn = (text, label, delta) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'step-btn';
+    b.textContent = text;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', () => { b.blur(); changeStartLevel(delta); });
+    return b;
+  };
+  levelValueEl = document.createElement('span');
+  levelValueEl.className = 'level-value';
+  stepper.append(stepBtn('−', 'Bajar nivel inicial', -1), levelValueEl, stepBtn('+', 'Subir nivel inicial', 1));
+  row.append(kbd, strong, stepper, levelDescEl);
+  updateLevelSelector();
+  return row;
+}
+
+function renderPauseMenu() {
+  pauseList.replaceChildren(
+    menuButton(1, '▶️ Reanudar', 'Volver a la partida', resumeFromPause),
+    menuButton(2, '🔁 Reiniciar', 'Nueva partida en el mismo modo', restartFromPause),
+    menuButton(3, '⌨️ Ver controles', 'Mostrar u ocultar las teclas', toggleControls),
+    levelSelector(),
+  );
+}
+
+function handlePauseKey(e) {
+  switch (e.code) {
+    case 'KeyP':
+    case 'Escape':
+    case 'Digit1':
+    case 'Numpad1':
+      resumeFromPause();
+      break;
+    case 'Digit2':
+    case 'Numpad2':
+      restartFromPause();
+      break;
+    case 'Digit3':
+    case 'Numpad3':
+      toggleControls();
+      break;
+    case 'Digit4':
+    case 'Numpad4':
+      changeStartLevel(startLevel >= MAX_START_LEVEL ? 1 - MAX_START_LEVEL : 1);
+      break;
+    case 'ArrowLeft':
+    case 'Minus':
+    case 'NumpadSubtract':
+      changeStartLevel(-1);
+      break;
+    case 'ArrowRight':
+    case 'Equal':
+    case 'NumpadAdd':
+      changeStartLevel(1);
+      break;
   }
 }
 
@@ -667,7 +800,8 @@ function init() {
   if (MODES[mode].prefillRows) prefillBoard(board, MODES[mode].prefillRows);
   score = 0;
   lines = 0;
-  level = 1;
+  baseLevel = MODES[mode].targetLevel ? 1 : startLevel;
+  level = baseLevel;
   combo = 0;
   b2b = false;
   hold = null;
@@ -688,7 +822,7 @@ function init() {
   garbageAccum = 0;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = dropIntervalFor(level);
   dropAccum = 0;
   lastTime = performance.now();
   queue = Array.from({ length: QUEUE_SIZE }, () => randomPiece());
@@ -697,6 +831,7 @@ function init() {
   modeLabelEl.textContent = MODES[mode].name.toUpperCase();
   updateHUD();
   overlay.classList.add('hidden');
+  if (pauseMenuOpen) closePauseMenu(); // a new game never starts behind the pause menu
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -740,8 +875,16 @@ function digitIndex(code) {
   return m ? Number(m[1]) - 1 : -1;
 }
 
+document.addEventListener('keyup', e => {
+  heldKeys.delete(e.code);
+  staleKeys.delete(e.code);
+});
+// Losing focus drops keyup events; forget held keys so none stay stale forever.
+window.addEventListener('blur', () => { heldKeys.clear(); staleKeys.clear(); });
+
 document.addEventListener('keydown', e => {
   ensureAudio();
+  heldKeys.add(e.code);
   if (modeMenuOpen) {
     const i = digitIndex(e.code);
     if (i >= 0 && i < MODE_IDS.length) selectMode(MODE_IDS[i]);
@@ -753,8 +896,16 @@ document.addEventListener('keydown', e => {
     else if (e.code === 'Escape' || e.code === 'KeyE') closeAbilityMenu();
     return;
   }
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (pauseMenuOpen) {
+    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    // auto-repeat only scrolls levels; a held P/Esc must not reopen/close the menu
+    if (!e.repeat || e.code.startsWith('Arrow')) handlePauseKey(e);
+    return;
+  }
   if (paused || gameOver) return;
+  if (staleKeys.has(e.code)) return; // held since before the pause menu closed
+  if (e.code === 'KeyP' || e.code === 'Escape') { openPauseMenu(); return; }
+  if (performance.now() < inputBlockedUntil) return;
   switch (e.code) {
     case 'ArrowLeft':
       tryMove(-1);
