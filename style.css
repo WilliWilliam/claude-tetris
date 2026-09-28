@@ -99,6 +99,29 @@ body {
   transition: background 0.15s, border-color 0.15s;
 }
 
+#skin-select {
+  background: var(--toggle-bg);
+  border: 1px solid var(--toggle-border);
+  border-radius: 999px;
+  color: var(--text);
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Skin overrides (after the theme palettes so they win). Skins not listed
+   here keep the light/dark theme's board background and grid. */
+body[data-skin="neon"] {
+  --board-bg: #000000;
+  --board-border: #1f1f3a;
+  --grid-color: #0d0d1c;
+}
+
+body[data-skin="neon"] #board {
+  box-shadow: 0 0 40px rgba(0, 245, 255, 0.25);
+}
+
 .game-container {
   display: flex;
   gap: 20px;
@@ -396,4 +419,211 @@ kbd {
 .menu-hint {
   font-size: 11px;
   color: var(--controls-text);
+}
+
+/* ---- Menú de pausa ---- */
+.level-row {
+  grid-template-columns: auto 1fr auto;
+  cursor: default;
+}
+
+.level-row small {
+  grid-column: 2 / 4;
+}
+
+.level-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid var(--kbd-border);
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step-btn:hover {
+  border-color: var(--btn-bg);
+}
+
+.level-value {
+  min-width: 2ch;
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pause-controls {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  color: var(--controls-text);
+}
+
+/* ---- Récords ---- */
+/* The record table can make menus taller than the board: scroll instead of clipping. */
+.overlay {
+  overflow-y: auto;
+}
+
+.overlay > .overlay-box {
+  margin: auto;
+  padding: 12px 0;
+}
+
+.records,
+.record-form {
+  width: 100%;
+  max-width: 320px;
+}
+
+.records {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.records.hidden,
+.record-form.hidden,
+.record-msg.hidden {
+  display: none;
+}
+
+.records-title {
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  color: var(--label-color);
+}
+
+.records-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.records-table th {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: var(--label-color);
+  text-align: left;
+  padding: 2px 4px;
+  border-bottom: 1px solid var(--board-border);
+}
+
+.records-table td {
+  padding: 3px 4px;
+  text-align: left;
+  border-bottom: 1px solid var(--grid-color);
+  white-space: nowrap;
+}
+
+.records-table .num {
+  text-align: right;
+  font-family: 'Courier New', Courier, monospace;
+  font-weight: 700;
+  color: var(--value-color);
+}
+
+.records-table th:nth-child(3),
+.records-table th:nth-child(4) {
+  text-align: right;
+}
+
+.records-table .name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.records-table .mode {
+  font-size: 10px;
+  color: var(--controls-text);
+}
+
+.records-table tr.highlight td {
+  background: var(--kbd-bg);
+  color: #ffd54f;
+  font-weight: 700;
+}
+
+body[data-theme="light"] .records-table tr.highlight td {
+  color: #b7791f;
+}
+
+.records-empty,
+.records-bests {
+  font-size: 12px;
+  color: var(--controls-text);
+}
+
+.pause-controls.hidden {
+  display: none;
+}
+
+.records-bests strong {
+  color: var(--value-color);
+}
+
+.records-bests strong.new,
+.record-msg {
+  color: #ffd54f;
+}
+
+body[data-theme="light"] .records-bests strong.new,
+body[data-theme="light"] .record-msg {
+  color: #b7791f;
+}
+
+.record-msg {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.record-form {
+  display: flex;
+  gap: 8px;
+}
+
+.record-form input {
+  flex: 1;
+  min-width: 0;
+  background: var(--board-bg);
+  border: 1px solid var(--kbd-border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  user-select: text;
+}
+
+.record-form input:focus {
+  outline: none;
+  border-color: var(--btn-bg);
+}
+
+.record-form .btn {
+  padding: 8px 16px;
+}
+
+.btn.records-reset {
+  padding: 4px 12px;
+  font-size: 11px;
 }

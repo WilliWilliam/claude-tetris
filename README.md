@@ -51,7 +51,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Combos**: limpiar líneas en colocaciones consecutivas multiplica la puntuación (x2, x3, x4…).
 - **T-spin**, **Back-to-Back** (Tetris o T-spin seguidos, ×1.5) y **Perfect Clear** (dejar el tablero vacío) con bonus.
 - **Efectos**: textos flotantes sobre el tablero, destello en Perfect Clear y **sonido sintetizado** (Web Audio) con botón para silenciarlo.
-- **Niveles** que aumentan cada 10 líneas y aceleran la caída.
+- **Niveles** que aumentan cada 10 líneas y aceleran la caída (se puede empezar en un nivel más alto desde el menú de pausa).
 - **Energía y habilidades**: cada línea limpiada carga 10 puntos de energía (máx. 100). Con la barra llena, `E` abre un menú (el juego se pausa) para elegir con `1`–`4`:
   - 👁️ **Ver 5 piezas** — muestra las próximas 5 piezas durante 30 s.
   - 🔄 **Cambiar pieza** — cambia la pieza actual por otra estándar distinta.
@@ -64,8 +64,15 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
   - **Bloques fijos** — el tablero empieza con bloques grises; elimínalos todos.
   - **Invisible** — las piezas desaparecen al fijarse; limpia 20 líneas (el tablero se revela al terminar).
   - **Rotación inversa** — desde el nivel 3 el giro pasa a antihorario; llega al nivel 5.
-- **Pausa** y **Game Over** con opción de reinicio.
+- **Menú de pausa** (`P` o `Esc`): **Reanudar**, **Reiniciar** (nueva partida en el mismo modo, sin recargar la página), **Ver controles** y **Nivel inicial** (1–10, con `←`/`→` o los botones `−`/`+`; se guarda entre sesiones y se aplica en la próxima partida, salvo en los modos con nivel objetivo). Mientras el menú está abierto el juego ignora las teclas de juego y, al volver, descarta durante un instante las teclas que sigan pulsadas para evitar movimientos accidentales.
+- **Game Over** con opción de reinicio.
+- **Tabla de récords local** (`localStorage`): top 5 puntuaciones con nombre del jugador (máx. 12 caracteres; «Anónimo» si se deja vacío), líneas y modo. Al terminar la partida, si la puntuación entra en el top aparece un campo para escribir el nombre y la fila nueva queda resaltada. También se guardan el **mejor combo** y las **líneas máximas** de cualquier partida. La tabla se muestra en la pantalla de inicio y en la de Game Over, con un botón «Borrar records» (pide confirmación).
 - **Modo claro / oscuro**: botón para alternar el tema visual, con el modo oscuro como valor por defecto y la preferencia guardada entre sesiones.
+- **Skins visuales**: selector en la cabecera que cambia la apariencia de los bloques al instante, sin recargar, y se recuerda entre sesiones:
+  - **Retro** — bloques cuadrados y colores planos (el estilo original, por defecto).
+  - **Neon** — fondo negro y bloques con brillo (_glow_).
+  - **Pastel** — colores suaves y bloques con bordes redondeados.
+  - **Pixel art** — textura de píxeles con biselado sobre cada bloque.
 
 ---
 
@@ -111,13 +118,14 @@ Después abre `http://localhost:8000` en el navegador.
 | `C` / `Shift` | Reservar pieza (hold)         |
 | `E`       | Usar habilidad (energía llena)    |
 | `1`–`6`   | Elegir opción en los menús        |
-| `P`       | Pausar / reanudar                 |
+| `P` / `Esc` | Abrir / cerrar el menú de pausa |
+| `←` / `→` | En pausa: cambiar el nivel inicial |
 
 ---
 
 ## Cómo funciona
 
-El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `game.js`.
+El juego se compone de varios archivos que cooperan. Los scripts son clásicos (sin módulos ES) y se cargan en este orden, compartiendo el ámbito global: `pieces.js` → `skins.js` → `audio.js` → `scoring.js` → `powerups.js` → `modes.js` → `abilities.js` → `records.js` → `game.js`.
 
 ### 1. `index.html`
 
@@ -125,7 +133,8 @@ Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
 - Un panel izquierdo con el slot `HOLD` y un panel derecho con `SCORE`, `LINES`, `LEVEL`, `COMBO`, vista de la siguiente pieza y la lista de controles.
-- Un overlay para los estados **PAUSA** y **GAME OVER**.
+- Un overlay para **GAME OVER** (con el formulario de nombre y la tabla de récords) y menús superpuestos para elegir modo, habilidad y el **menú de pausa**.
+- El menú de inicio (elegir modo) con la tabla de récords.
 
 ### 2. `style.css`
 
@@ -134,8 +143,10 @@ Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada
 ### 3. `pieces.js`, `audio.js`, `scoring.js` y `powerups.js`
 
 - **`pieces.js`**: constantes del tablero (`COLS`, `ROWS`, `BLOCK`), `COLORS`, `PIECES` (tipos 1–7 estándar, 8–12 especiales, 13 power-up), `POWERUPS`, `createPiece(type, power)`, `randomPiece()` y `randomPowerUp()`.
+- **`skins.js`**: `SKINS` (retro, neon, pastel, pixel), cada una con su nombre, su paleta `colors` (alineada con los índices de `COLORS`) y su función `draw` para un bloque; `loadSkin()`/`saveSkin()` leen y guardan la preferencia en `localStorage` (`tetris-skin`).
 - **`modes.js`**: configuración de los modos (`MODES`) y funciones puras: `checkGoal`, `goalText`, `prefillBoard`, `pushGarbage`, `countGarbage`.
 - **`abilities.js`**: constantes de energía y la lista `ABILITIES` (los efectos viven en `game.js` porque tocan el estado de la partida).
+- **`records.js`**: funciones puras para la tabla de récords (`loadRecords`, `saveRecords`, `clearRecords`, `recordRank`/`qualifies`, `insertRecord`, `updateBests`); todo acceso a `localStorage` va envuelto en `try/catch`.
 - **`powerups.js`**: efectos puros sobre la matriz del tablero (`bombEffect`, `rayEffect`, `tintEffect`, `compactColumns`) y `applyPowerUp()`.
 - **`audio.js`**: efectos de sonido sintetizados con la Web Audio API (sin archivos de audio). El `AudioContext` se crea con la primera tecla o clic; el silencio se guarda en `localStorage`.
 - **`scoring.js`**: función pura `evaluateClear()` que calcula puntos, combo, B2B y las etiquetas a mostrar:
@@ -156,7 +167,7 @@ Contiene el estado, el bucle, la entrada y el dibujado. A grandes rasgos:
 - **Game loop** (`loop`): basado en `requestAnimationFrame`, acumula el tiempo transcurrido y baja la pieza una fila cuando se supera `dropInterval`.
 - **Limpieza de líneas** (`clearLines`): recorre el tablero de abajo hacia arriba; cada fila completa se elimina y se inserta una vacía en la cima.
 - **Puntuación**: usa la tabla clásica `[0, 100, 300, 500, 800]` multiplicada por el nivel actual; el hard drop suma 2 puntos por celda recorrida y el soft drop 1 punto por fila.
-- **Nivel y velocidad**: el nivel sube cada 10 líneas; la velocidad de caída se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
+- **Nivel y velocidad**: el nivel es `max(nivel inicial, floor(líneas / 10) + 1)`; la velocidad de caída (`dropIntervalFor`) se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
 - **Ghost piece** (`ghostY`): proyecta la posición final de la pieza actual hacia abajo y la dibuja con `globalAlpha = 0.2`.
 - **Hold** (`holdPiece`): guarda la pieza actual o la intercambia con la reservada (que reaparece en su posición inicial); se desbloquea al fijar la pieza.
 - **T-spin** (`isTSpin`): regla de las 3 esquinas; la T debe fijarse justo después de una rotación (mover o bajar anula el giro).
@@ -176,7 +187,7 @@ init()
      ├─ draw()  (grid + tablero + ghost + pieza actual)
      └─ requestAnimationFrame(loop)
 
-   keydown → mover / rotar / soft-drop / hard-drop / hold / pausa
+   keydown → mover / rotar / soft-drop / hard-drop / hold / menú de pausa
 ```
 
 Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara `endGame()` y se muestra el overlay de **Game Over**.
@@ -203,11 +214,13 @@ Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara
 ├── index.html      # Estructura del DOM y canvas
 ├── style.css       # Estilos del juego (dark theme)
 ├── pieces.js       # Tablero, piezas y colores
+├── skins.js        # Skins visuales: paletas y estilo de bloque
 ├── audio.js        # Efectos de sonido (Web Audio)
 ├── scoring.js      # Puntuación: combos, T-spin, B2B, Perfect Clear
 ├── powerups.js     # Efectos de los power-ups sobre el tablero
 ├── modes.js        # Modos desafío: objetivos, basura, bloques fijos
 ├── abilities.js    # Energía y lista de habilidades
+├── records.js      # Tabla de récords local (localStorage)
 ├── game.js         # Estado, bucle, entrada y dibujado
 └── README.md
 ```
@@ -226,6 +239,8 @@ Algunos parámetros fáciles de tunear en `pieces.js`, `scoring.js` y `game.js`:
 | `COLORS`       | Paleta de colores por tipo de pieza      | 7 colores             |
 | `LINE_SCORES`  | Puntos por 1, 2, 3 o 4 líneas eliminadas | `[0,100,300,500,800]` |
 | `dropInterval` | Velocidad inicial de caída en ms         | `1000`                |
+
+Para añadir una **skin**, agrega una entrada a `SKINS` en `skins.js` con `name`, `colors` (15 entradas, mismo orden que `COLORS`) y `draw(context, px, py, size, color)`. Si quieres otro fondo o rejilla para el tablero, añade una regla `body[data-skin="…"]` en `style.css` que redefina `--board-bg` y `--grid-color`; si no, se usan los del tema claro/oscuro.
 
 > Si cambias `COLS`, `ROWS` o `BLOCK`, recuerda ajustar también `width` y `height` del `<canvas id="board">` en `index.html` para que coincida (`COLS × BLOCK` × `ROWS × BLOCK`).
 

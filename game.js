@@ -1,13 +1,15 @@
 'use strict';
 
-// Depends on pieces.js, audio.js, scoring.js, powerups.js, modes.js and
-// abilities.js (loaded first by index.html).
+// Depends on pieces.js, skins.js, audio.js, scoring.js, powerups.js, modes.js,
+// abilities.js and records.js (loaded first by index.html).
 
 const POPUP_MS = 1200;
 const FLASH_MS = 600;
 const FREEZE_MS = 5000;
 const POWERUP_EVERY = 8; // lines
 const QUEUE_SIZE = 5;
+const MAX_START_LEVEL = 10;
+const RESUME_GUARD_MS = 200; // gameplay keys ignored right after leaving the pause menu
 
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
@@ -35,17 +37,34 @@ const modeMenu = document.getElementById('mode-menu');
 const modeList = document.getElementById('mode-list');
 const abilityMenu = document.getElementById('ability-menu');
 const abilityList = document.getElementById('ability-list');
+const pauseMenu = document.getElementById('pause-menu');
+const pauseList = document.getElementById('pause-list');
+const pauseControls = document.getElementById('pause-controls');
+const recordMsg = document.getElementById('record-msg');
+const recordForm = document.getElementById('record-form');
+const recordNameInput = document.getElementById('record-name');
+const recordSaveBtn = document.getElementById('record-save');
+const overRecords = document.getElementById('over-records');
+const menuRecords = document.getElementById('menu-records');
 const themeToggleBtn = document.getElementById('theme-toggle');
 const soundToggleBtn = document.getElementById('sound-toggle');
+const skinSelect = document.getElementById('skin-select');
 
 const THEME_KEY = 'tetris-theme';
+const START_LEVEL_KEY = 'tetris-start-level';
 
 let board, current, queue, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let hold, holdUsed, combo, b2b, lastMoveRotate, popups, flashUntil;
 let nextPowerAt, pendingPower, pendingSingle, freezeUntil, pausedAt;
 let mode = 'classic', elapsed, garbageAccum, energy, slowUntil, previewUntil, snapshot;
-let modeMenuOpen = false, abilityMenuOpen = false;
+let modeMenuOpen = false, abilityMenuOpen = false, pauseMenuOpen = false;
+let startLevel = loadStartLevel(), baseLevel = 1;
+let inputBlockedUntil = 0;
+const heldKeys = new Set(), staleKeys = new Set();
+let levelValueEl, levelDescEl;
+let maxCombo, pendingRecord, newBests;
 let gridColor;
+let skin = loadSkin();
 
 function readGridColor() {
   gridColor = getComputedStyle(document.body).getPropertyValue('--grid-color').trim();
@@ -56,11 +75,24 @@ function applyTheme(theme) {
   localStorage.setItem(THEME_KEY, theme);
   themeToggleBtn.textContent = theme === 'light' ? '☀️' : '🌙';
   readGridColor();
-  if (board) {
-    draw();
-    drawNext();
-    drawHold();
-  }
+  redrawAll();
+}
+
+function redrawAll() {
+  if (!board) return; // no game yet (mode menu still open)
+  draw();
+  drawNext();
+  drawHold();
+}
+
+// Skin: sets data-skin (CSS may override board bg / grid) and redraws.
+function applySkin(id) {
+  skin = isSkin(id) ? id : DEFAULT_SKIN;
+  document.body.dataset.skin = skin;
+  skinSelect.value = skin;
+  saveSkin(skin);
+  readGridColor();
+  redrawAll();
 }
 
 function toggleTheme() {
@@ -77,6 +109,22 @@ function toggleSound() {
   ensureAudio();
   setMuted(!muted);
   updateSoundButton();
+}
+
+function loadStartLevel() {
+  try {
+    const n = parseInt(localStorage.getItem(START_LEVEL_KEY), 10);
+    if (n >= 1 && n <= MAX_START_LEVEL) return n;
+  } catch (e) { /* storage unavailable */ }
+  return 1;
+}
+
+function saveStartLevel() {
+  try { localStorage.setItem(START_LEVEL_KEY, String(startLevel)); } catch (e) { /* storage unavailable */ }
+}
+
+function dropIntervalFor(lvl) {
+  return Math.max(100, 1000 - (lvl - 1) * 90);
 }
 
 function createBoard() {
@@ -167,8 +215,8 @@ function clearLines() {
   }
   if (cleared) {
     lines += cleared;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    level = Math.max(baseLevel, Math.floor(lines / 10) + 1);
+    dropInterval = dropIntervalFor(level);
   }
   return cleared;
 }
@@ -249,6 +297,7 @@ function lockPiece() {
   const result = evaluateClear({ cleared, tspin, perfect, combo, b2b, level: lvl });
   score += result.points;
   combo = result.combo;
+  maxCombo = Math.max(maxCombo, combo);
   b2b = result.b2b;
 
   showPopups(result.labels);
@@ -335,6 +384,7 @@ function closeAbilityMenu() {
   abilityMenu.classList.add('hidden');
   abilityMenuOpen = false;
   paused = false;
+  guardHeldKeys();
   resume();
 }
 
@@ -427,13 +477,9 @@ function showPopups(labels) {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  const s = SKINS[skin];
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  s.draw(context, x * size, y * size, size, s.colors[colorIndex]);
   context.globalAlpha = 1;
 }
 
@@ -581,6 +627,7 @@ function drawHold() {
 // ---- Game flow ----
 
 function endGame(title = 'GAME OVER', won = false) {
+  if (gameOver) return;
   gameOver = true;
   cancelAnimationFrame(animId);
   won ? sfx.perfect() : sfx.gameOver();
@@ -588,8 +635,101 @@ function endGame(title = 'GAME OVER', won = false) {
   overlayTitle.classList.toggle('win', won);
   const time = mode === 'classic' ? '' : ` · Tiempo ${formatTime(elapsed)}`;
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}${time}`;
+  showEndRecords();
   overlay.classList.remove('hidden');
+  if (pendingRecord) recordNameInput.focus();
   draw(); // show the final placement (and reveal the invisible board)
+}
+
+// ---- Records ----
+
+// Best combo / max lines are saved right away; the score waits for the name form.
+function showEndRecords() {
+  const before = loadRecords();
+  const records = updateBests(before, { combo: maxCombo, lines });
+  newBests = {
+    combo: records.bestCombo > before.bestCombo,
+    lines: records.maxLines > before.maxLines,
+  };
+  saveRecords(records);
+  const rank = recordRank(records, score);
+  pendingRecord = rank >= 0 ? { score, lines, mode: MODES[mode].name, date: new Date().toISOString() } : null;
+  recordMsg.textContent = pendingRecord ? `¡Nuevo récord! Puesto #${rank + 1} del top ${RECORDS_MAX}` : '';
+  recordMsg.classList.toggle('hidden', !pendingRecord);
+  recordForm.classList.toggle('hidden', !pendingRecord);
+  recordNameInput.value = '';
+  renderRecords(overRecords, records, -1);
+  overRecords.classList.remove('hidden');
+}
+
+function submitRecord() {
+  if (!pendingRecord) return;
+  const result = insertRecord(loadRecords(), { ...pendingRecord, name: recordNameInput.value });
+  pendingRecord = null;
+  saveRecords(result.records);
+  recordNameInput.blur();
+  recordForm.classList.add('hidden');
+  recordMsg.textContent = result.index >= 0 ? `¡Guardado en el puesto #${result.index + 1}!` : '';
+  recordMsg.classList.toggle('hidden', result.index < 0);
+  renderRecords(overRecords, result.records, result.index);
+}
+
+function resetRecords() {
+  if (!confirm('¿Borrar todos los récords? Esta acción no se puede deshacer.')) return;
+  const records = clearRecords();
+  newBests = null;
+  // A score waiting for its name now ranks against the empty table.
+  if (pendingRecord) recordMsg.textContent = `¡Nuevo récord! Puesto #${recordRank(records, pendingRecord.score) + 1} del top ${RECORDS_MAX}`;
+  renderRecords(menuRecords, records, -1);
+  renderRecords(overRecords, records, -1);
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+// Top 5 table + best combo / max lines + reset button. Names only go through textContent.
+function renderRecords(container, records, highlight) {
+  const children = [el('p', 'records-title', `TOP ${RECORDS_MAX}`)];
+  if (records.top.length) {
+    const table = el('table', 'records-table');
+    const head = el('tr');
+    for (const h of ['#', 'Nombre', 'Puntos', 'Líneas', 'Modo']) head.append(el('th', '', h));
+    table.append(el('thead'), el('tbody'));
+    table.tHead.append(head);
+    records.top.forEach((r, i) => {
+      const row = el('tr', i === highlight ? 'highlight' : '');
+      if (r.date) row.title = new Date(r.date).toLocaleDateString();
+      row.append(
+        el('td', '', i + 1),
+        el('td', 'name', r.name),
+        el('td', 'num', r.score.toLocaleString()),
+        el('td', 'num', r.lines),
+        el('td', 'mode', r.mode),
+      );
+      table.tBodies[0].append(row);
+    });
+    children.push(table);
+  } else {
+    children.push(el('p', 'records-empty', 'Aún no hay récords'));
+  }
+  const bests = el('p', 'records-bests');
+  const combo = el('strong', newBests?.combo && container === overRecords ? 'new' : '',
+    records.bestCombo >= 2 ? `x${records.bestCombo}` : '—');
+  const maxL = el('strong', newBests?.lines && container === overRecords ? 'new' : '', records.maxLines);
+  bests.append('Mejor combo ', combo, ' · Máx. líneas ', maxL);
+  children.push(bests);
+  const hasData = records.top.length || records.bestCombo || records.maxLines;
+  if (hasData) {
+    const reset = el('button', 'btn secondary records-reset', 'Borrar records');
+    reset.type = 'button';
+    reset.addEventListener('click', () => { reset.blur(); resetRecords(); });
+    children.push(reset);
+  }
+  container.replaceChildren(...children);
 }
 
 function suspend() {
@@ -608,18 +748,124 @@ function resume() {
   loop(now);
 }
 
-function togglePause() {
-  if (gameOver || abilityMenuOpen) return;
-  paused = !paused;
-  if (!paused) {
-    overlay.classList.add('hidden');
-    resume();
-  } else {
-    suspend();
-    overlayTitle.textContent = 'PAUSA';
-    overlayTitle.classList.remove('win');
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
+// ---- Pause menu ----
+
+function openPauseMenu() {
+  if (paused || gameOver || modeMenuOpen || abilityMenuOpen) return;
+  paused = true;
+  suspend();
+  pauseMenuOpen = true;
+  pauseControls.classList.add('hidden');
+  renderPauseMenu();
+  pauseMenu.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  pauseMenu.classList.add('hidden');
+  pauseMenuOpen = false;
+  guardHeldKeys();
+}
+
+// Keys still held from a menu must not act on the game once it resumes.
+function guardHeldKeys() {
+  inputBlockedUntil = performance.now() + RESUME_GUARD_MS;
+  staleKeys.clear();
+  heldKeys.forEach(k => staleKeys.add(k));
+}
+
+function resumeFromPause() {
+  closePauseMenu();
+  paused = false;
+  resume();
+}
+
+function restartFromPause() {
+  init(); // closes the pause menu
+}
+
+function toggleControls() {
+  pauseControls.classList.toggle('hidden');
+}
+
+function changeStartLevel(delta) {
+  startLevel = Math.min(MAX_START_LEVEL, Math.max(1, startLevel + delta));
+  saveStartLevel();
+  updateLevelSelector();
+}
+
+function updateLevelSelector() {
+  levelValueEl.textContent = startLevel;
+  levelDescEl.textContent = MODES[mode].targetLevel
+    ? 'No se aplica en este modo'
+    : 'Se aplica en la próxima partida';
+}
+
+function levelSelector() {
+  const row = document.createElement('div');
+  row.className = 'menu-btn level-row';
+  const kbd = document.createElement('kbd');
+  kbd.textContent = '4';
+  const strong = document.createElement('strong');
+  strong.textContent = 'Nivel inicial';
+  levelDescEl = document.createElement('small');
+  const stepper = document.createElement('div');
+  stepper.className = 'level-stepper';
+  const stepBtn = (text, label, delta) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'step-btn';
+    b.textContent = text;
+    b.setAttribute('aria-label', label);
+    b.addEventListener('click', () => { b.blur(); changeStartLevel(delta); });
+    return b;
+  };
+  levelValueEl = document.createElement('span');
+  levelValueEl.className = 'level-value';
+  stepper.append(stepBtn('−', 'Bajar nivel inicial', -1), levelValueEl, stepBtn('+', 'Subir nivel inicial', 1));
+  row.append(kbd, strong, stepper, levelDescEl);
+  updateLevelSelector();
+  return row;
+}
+
+function renderPauseMenu() {
+  pauseList.replaceChildren(
+    menuButton(1, '▶️ Reanudar', 'Volver a la partida', resumeFromPause),
+    menuButton(2, '🔁 Reiniciar', 'Nueva partida en el mismo modo', restartFromPause),
+    menuButton(3, '⌨️ Ver controles', 'Mostrar u ocultar las teclas', toggleControls),
+    levelSelector(),
+  );
+}
+
+function handlePauseKey(e) {
+  switch (e.code) {
+    case 'KeyP':
+    case 'Escape':
+    case 'Digit1':
+    case 'Numpad1':
+      resumeFromPause();
+      break;
+    case 'Digit2':
+    case 'Numpad2':
+      restartFromPause();
+      break;
+    case 'Digit3':
+    case 'Numpad3':
+      toggleControls();
+      break;
+    case 'Digit4':
+    case 'Numpad4':
+      changeStartLevel(startLevel >= MAX_START_LEVEL ? 1 - MAX_START_LEVEL : 1);
+      break;
+    case 'ArrowLeft':
+    case 'Minus':
+    case 'NumpadSubtract':
+      changeStartLevel(-1);
+      break;
+    case 'ArrowRight':
+    case 'Equal':
+    case 'NumpadAdd':
+      changeStartLevel(1);
+      break;
   }
 }
 
@@ -662,13 +908,17 @@ function loop(ts) {
 }
 
 function init() {
+  if (pendingRecord) submitRecord(); // leaving the game-over screen keeps the score
   readGridColor();
   board = createBoard();
   if (MODES[mode].prefillRows) prefillBoard(board, MODES[mode].prefillRows);
   score = 0;
   lines = 0;
-  level = 1;
+  baseLevel = MODES[mode].targetLevel ? 1 : startLevel;
+  level = baseLevel;
   combo = 0;
+  maxCombo = 0;
+  pendingRecord = null;
   b2b = false;
   hold = null;
   holdUsed = false;
@@ -688,7 +938,7 @@ function init() {
   garbageAccum = 0;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = dropIntervalFor(level);
   dropAccum = 0;
   lastTime = performance.now();
   queue = Array.from({ length: QUEUE_SIZE }, () => randomPiece());
@@ -697,6 +947,7 @@ function init() {
   modeLabelEl.textContent = MODES[mode].name.toUpperCase();
   updateHUD();
   overlay.classList.add('hidden');
+  if (pauseMenuOpen) closePauseMenu(); // a new game never starts behind the pause menu
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -720,7 +971,9 @@ function menuButton(n, title, desc, onClick, disabled = false) {
 }
 
 function showModeMenu() {
+  if (pendingRecord) submitRecord();
   overlay.classList.add('hidden');
+  renderRecords(menuRecords, loadRecords(), -1);
   modeMenuOpen = true;
   modeMenu.classList.remove('hidden');
 }
@@ -740,8 +993,18 @@ function digitIndex(code) {
   return m ? Number(m[1]) - 1 : -1;
 }
 
+document.addEventListener('keyup', e => {
+  heldKeys.delete(e.code);
+  staleKeys.delete(e.code);
+});
+// Losing focus drops keyup events; forget held keys so none stay stale forever.
+window.addEventListener('blur', () => { heldKeys.clear(); staleKeys.clear(); });
+
 document.addEventListener('keydown', e => {
+  // Typing a name for the records table must not move pieces or open menus.
+  if (e.target instanceof HTMLInputElement) return;
   ensureAudio();
+  heldKeys.add(e.code);
   if (modeMenuOpen) {
     const i = digitIndex(e.code);
     if (i >= 0 && i < MODE_IDS.length) selectMode(MODE_IDS[i]);
@@ -753,8 +1016,16 @@ document.addEventListener('keydown', e => {
     else if (e.code === 'Escape' || e.code === 'KeyE') closeAbilityMenu();
     return;
   }
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (pauseMenuOpen) {
+    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    // auto-repeat only scrolls levels; a held P/Esc must not reopen/close the menu
+    if (!e.repeat || e.code.startsWith('Arrow')) handlePauseKey(e);
+    return;
+  }
   if (paused || gameOver) return;
+  if (staleKeys.has(e.code)) return; // held since before the pause menu closed
+  if (e.code === 'KeyP' || e.code === 'Escape') { openPauseMenu(); return; }
+  if (performance.now() < inputBlockedUntil) return;
   switch (e.code) {
     case 'ArrowLeft':
       tryMove(-1);
@@ -782,14 +1053,24 @@ document.addEventListener('keydown', e => {
       openAbilityMenu();
       return;
   }
+  // The name input gets focus on game over: don't let this key type into it.
+  if (gameOver) e.preventDefault();
   updateHUD();
 });
 
+recordForm.addEventListener('submit', e => {
+  e.preventDefault();
+  recordSaveBtn.blur();
+  submitRecord();
+});
 restartBtn.addEventListener('click', () => { ensureAudio(); restartBtn.blur(); init(); });
 modeBtn.addEventListener('click', () => { modeBtn.blur(); showModeMenu(); });
 // blur so a focused button doesn't also react to Space (hard drop)
 themeToggleBtn.addEventListener('click', () => { toggleTheme(); themeToggleBtn.blur(); });
 soundToggleBtn.addEventListener('click', () => { toggleSound(); soundToggleBtn.blur(); });
+SKIN_ORDER.forEach(id => skinSelect.add(new Option(SKINS[id].name, id)));
+skinSelect.addEventListener('change', () => { applySkin(skinSelect.value); skinSelect.blur(); });
+applySkin(skin);
 themeToggleBtn.textContent = document.body.dataset.theme === 'light' ? '☀️' : '🌙';
 updateSoundButton();
 
