@@ -224,7 +224,13 @@ function restoreSnapshot() {
   drawHold();
 }
 
+// True if the piece has filled cells above the board (row < 0), e.g. pushed up by garbage.
+function lockedOut() {
+  return current.shape.some((row, r) => current.y + r < 0 && row.some(v => v));
+}
+
 function lockPiece() {
+  if (lockedOut()) { endGame(); return; }
   takeSnapshot();
   const tspin = isTSpin();
   const lvl = level;
@@ -583,6 +589,7 @@ function endGame(title = 'GAME OVER', won = false) {
   const time = mode === 'classic' ? '' : ` · Tiempo ${formatTime(elapsed)}`;
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}${time}`;
   overlay.classList.remove('hidden');
+  draw(); // show the final placement (and reveal the invisible board)
 }
 
 function suspend() {

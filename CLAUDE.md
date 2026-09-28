@@ -23,7 +23,7 @@ Classic `<script>` files (no ES modules, so `file://` still works) loaded in ord
 Key conventions that span multiple functions:
 
 - **Cell values are piece types.** `board` is a `ROWS × COLS` matrix of `0` (empty) or `1–7`. The numbers inside each `PIECES` shape matrix are that piece's type, which doubles as the index into `COLORS`. `merge()` copies shape values straight into the board, so adding/reordering pieces requires keeping `PIECES` and `COLORS` indices aligned (`T_TYPE`, `SINGLE_TYPE`, `HOLLOW_TYPE`, `POWER_TYPE`, `PENTOMINO_TYPES` and `STANDARD_COUNT` in `pieces.js` name the indices; `randomPiece()` only draws 1–7 plus occasional 8–10/12 — the single (11) is only queued after a Tetris and the power-up (13) every `POWERUP_EVERY` lines, both via `nextPiece()`). All shapes must fit in 4×4 for the previews.
-- **`collide(shape, ox, oy)`** is the single source of truth for movement, rotation, gravity, ghost projection (`ghostY`), and game-over detection (a freshly `spawn()`ed piece that already collides triggers `endGame()`). Cells with negative `y` are allowed.
+- **`collide(shape, ox, oy)`** is the single source of truth for movement, rotation, gravity, ghost projection (`ghostY`), and game-over detection (a freshly `spawn()`ed piece that already collides triggers `endGame()`). Cells with negative `y` are allowed while moving, but a piece that locks with cells above row 0 (possible when garbage pushes it up) ends the game via `lockedOut()` — `merge()` would otherwise write to `board[-1]`.
 - **Game loop and game over:** `endGame()` cancels the pending frame, but `loop()` must also stop itself: it bails out early when `gameOver || paused`, and returns without re-scheduling when a gravity lock triggers game over. Otherwise the loop keeps locking the colliding spawn and stacks pieces behind the overlay.
 - **`lockPiece()` is the single place scoring happens:** it checks `isTSpin()` before `merge()`, captures `level` before `clearLines()` (which now only updates lines/level/speed and returns the count), calls `evaluateClear()`, then resets `holdUsed`, redraws hold and calls `updateHUD()` (gravity locks don't go through the keydown handler).
 - **Power-ups:** a piece with `power` set (type `POWER_TYPE`, 1×1) is **never merged**; `lockPiece()` calls `applyPowerUp(board, kind, x, y)` instead, then clears lines and scores as usual. Freeze sets `freezeUntil`, which `loop()` honours by zeroing `dropAccum`, and `togglePause()` shifts it by the paused time.
@@ -37,7 +37,7 @@ Key conventions that span multiple functions:
 
 ## Coupled constants
 
-If you change `COLS`, `ROWS`, or `BLOCK` in `game.js`, update the `<canvas id="board">` `width`/`height` in `index.html` to `COLS × BLOCK` by `ROWS × BLOCK`. `#next-canvas` and `#hold-canvas` (120×120) assume a 4×4 grid of 30px cells (`NB` in `drawPreview`).
+If you change `COLS`, `ROWS`, or `BLOCK` in `game.js`, update the `<canvas id="board">` `width`/`height` in `index.html` to `COLS × BLOCK` by `ROWS × BLOCK`. `#next-canvas` and `#hold-canvas` (120×120) assume a 4×4 grid of 30px cells (`size` 30 in `drawPreview`). `#queue-canvas` (60×240) is 4 pieces × a 4×4 box of 15px cells.
 
 Controls are documented both in `index.html` (side panel) and `README.md`; keep them in sync with the `keydown` handler.
 
