@@ -397,3 +397,58 @@ kbd {
   font-size: 11px;
   color: var(--controls-text);
 }
+
+/* ---- Menú de pausa ---- */
+.level-row {
+  grid-template-columns: auto 1fr auto;
+  cursor: default;
+}
+
+.level-row small {
+  grid-column: 2 / 4;
+}
+
+.level-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  border: 1px solid var(--kbd-border);
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.step-btn:hover {
+  border-color: var(--btn-bg);
+}
+
+.level-value {
+  min-width: 2ch;
+  text-align: center;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pause-controls {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  color: var(--controls-text);
+}
+
+.pause-controls.hidden {
+  display: none;
+}

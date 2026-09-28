@@ -51,7 +51,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Combos**: limpiar líneas en colocaciones consecutivas multiplica la puntuación (x2, x3, x4…).
 - **T-spin**, **Back-to-Back** (Tetris o T-spin seguidos, ×1.5) y **Perfect Clear** (dejar el tablero vacío) con bonus.
 - **Efectos**: textos flotantes sobre el tablero, destello en Perfect Clear y **sonido sintetizado** (Web Audio) con botón para silenciarlo.
-- **Niveles** que aumentan cada 10 líneas y aceleran la caída.
+- **Niveles** que aumentan cada 10 líneas y aceleran la caída (se puede empezar en un nivel más alto desde el menú de pausa).
 - **Energía y habilidades**: cada línea limpiada carga 10 puntos de energía (máx. 100). Con la barra llena, `E` abre un menú (el juego se pausa) para elegir con `1`–`4`:
   - 👁️ **Ver 5 piezas** — muestra las próximas 5 piezas durante 30 s.
   - 🔄 **Cambiar pieza** — cambia la pieza actual por otra estándar distinta.
@@ -64,7 +64,8 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
   - **Bloques fijos** — el tablero empieza con bloques grises; elimínalos todos.
   - **Invisible** — las piezas desaparecen al fijarse; limpia 20 líneas (el tablero se revela al terminar).
   - **Rotación inversa** — desde el nivel 3 el giro pasa a antihorario; llega al nivel 5.
-- **Pausa** y **Game Over** con opción de reinicio.
+- **Menú de pausa** (`P` o `Esc`): **Reanudar**, **Reiniciar** (nueva partida en el mismo modo, sin recargar la página), **Ver controles** y **Nivel inicial** (1–10, con `←`/`→` o los botones `−`/`+`; se guarda entre sesiones y se aplica en la próxima partida, salvo en los modos con nivel objetivo). Mientras el menú está abierto el juego ignora las teclas de juego y, al volver, descarta durante un instante las teclas que sigan pulsadas para evitar movimientos accidentales.
+- **Game Over** con opción de reinicio.
 - **Modo claro / oscuro**: botón para alternar el tema visual, con el modo oscuro como valor por defecto y la preferencia guardada entre sesiones.
 
 ---
@@ -111,7 +112,8 @@ Después abre `http://localhost:8000` en el navegador.
 | `C` / `Shift` | Reservar pieza (hold)         |
 | `E`       | Usar habilidad (energía llena)    |
 | `1`–`6`   | Elegir opción en los menús        |
-| `P`       | Pausar / reanudar                 |
+| `P` / `Esc` | Abrir / cerrar el menú de pausa |
+| `←` / `→` | En pausa: cambiar el nivel inicial |
 
 ---
 
@@ -125,7 +127,7 @@ Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero.
 - Un panel izquierdo con el slot `HOLD` y un panel derecho con `SCORE`, `LINES`, `LEVEL`, `COMBO`, vista de la siguiente pieza y la lista de controles.
-- Un overlay para los estados **PAUSA** y **GAME OVER**.
+- Un overlay para **GAME OVER** y menús superpuestos para elegir modo, habilidad y el **menú de pausa**.
 
 ### 2. `style.css`
 
@@ -156,7 +158,7 @@ Contiene el estado, el bucle, la entrada y el dibujado. A grandes rasgos:
 - **Game loop** (`loop`): basado en `requestAnimationFrame`, acumula el tiempo transcurrido y baja la pieza una fila cuando se supera `dropInterval`.
 - **Limpieza de líneas** (`clearLines`): recorre el tablero de abajo hacia arriba; cada fila completa se elimina y se inserta una vacía en la cima.
 - **Puntuación**: usa la tabla clásica `[0, 100, 300, 500, 800]` multiplicada por el nivel actual; el hard drop suma 2 puntos por celda recorrida y el soft drop 1 punto por fila.
-- **Nivel y velocidad**: el nivel sube cada 10 líneas; la velocidad de caída se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
+- **Nivel y velocidad**: el nivel es `max(nivel inicial, floor(líneas / 10) + 1)`; la velocidad de caída (`dropIntervalFor`) se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
 - **Ghost piece** (`ghostY`): proyecta la posición final de la pieza actual hacia abajo y la dibuja con `globalAlpha = 0.2`.
 - **Hold** (`holdPiece`): guarda la pieza actual o la intercambia con la reservada (que reaparece en su posición inicial); se desbloquea al fijar la pieza.
 - **T-spin** (`isTSpin`): regla de las 3 esquinas; la T debe fijarse justo después de una rotación (mover o bajar anula el giro).
@@ -176,7 +178,7 @@ init()
      ├─ draw()  (grid + tablero + ghost + pieza actual)
      └─ requestAnimationFrame(loop)
 
-   keydown → mover / rotar / soft-drop / hard-drop / hold / pausa
+   keydown → mover / rotar / soft-drop / hard-drop / hold / menú de pausa
 ```
 
 Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara `endGame()` y se muestra el overlay de **Game Over**.
