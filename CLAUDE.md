@@ -18,7 +18,7 @@ There is no test suite; verify changes by playing the game in a browser.
 
 ## Architecture
 
-Classic `<script>` files (no ES modules, so `file://` still works) loaded in order by `index.html`, sharing the global scope: `pieces.js` (board constants, `COLORS`, `PIECES`, `createPiece`/`randomPiece`) → `audio.js` (Web Audio `sfx`, lazy `AudioContext`, `muted`) → `scoring.js` (pure `evaluateClear`, no DOM — testable with Node `vm`) → `powerups.js` (pure board effects, mutate the board passed in) → `modes.js` (`MODES` config + pure goal/garbage helpers) → `abilities.js` (energy constants + `ABILITIES` list) → `game.js` (state, loop, input, drawing).
+Classic `<script>` files (no ES modules, so `file://` still works) loaded in order by `index.html`, sharing the global scope: `pieces.js` (board constants, `COLORS`, `PIECES`, `createPiece`/`randomPiece`) → `skins.js` (`SKINS` palettes + per-skin block `draw`, `loadSkin`/`saveSkin`) → `audio.js` (Web Audio `sfx`, lazy `AudioContext`, `muted`) → `scoring.js` (pure `evaluateClear`, no DOM — testable with Node `vm`) → `powerups.js` (pure board effects, mutate the board passed in) → `modes.js` (`MODES` config + pure goal/garbage helpers) → `abilities.js` (energy constants + `ABILITIES` list) → `game.js` (state, loop, input, drawing).
 
 Key conventions that span multiple functions:
 
@@ -33,6 +33,7 @@ Key conventions that span multiple functions:
 - **Start level:** `startLevel` (1–`MAX_START_LEVEL`, `localStorage` `tetris-start-level`) is copied into `baseLevel` by `init()` (forced to 1 in modes with `targetLevel`); `clearLines()` uses `level = max(baseLevel, floor(lines/10)+1)` and `dropIntervalFor(level)` sets the speed.
 - **Goals:** `checkGoalNow()` runs after each lock and every frame in `loop()` (time-based goals); it ends the game via `endGame(title, won)`, and `loop()` returns without re-scheduling when that happens.
 - **Undo:** `lockPiece()` calls `takeSnapshot()` first (board copy, score/lines/level, hold, queue as `{type, power}` specs…); `restoreSnapshot()` rebuilds pieces with `createPiece()`. Rising garbage clears the snapshot. Energy is not part of the snapshot.
+- **Skins:** `drawBlock()` never reads `COLORS` directly; it calls `SKINS[skin].draw(context, px, py, size, SKINS[skin].colors[type])` (caller sets `globalAlpha`; a skin that touches shadow/other state must `save()`/`restore()`). Each `SKINS[*].colors` must have 15 entries aligned with `COLORS`/`PIECES` indices (incl. 13 power-up, 14 garbage) — update every skin when adding a piece type. Board bg/grid overrides are CSS vars under `body[data-skin="…"]` in `style.css` (after the theme palettes); `applySkin()` re-reads `gridColor` and redraws only if `board` exists. Saved in `localStorage` `tetris-skin`; unknown value → `retro`.
 - **Garbage cells** are `GARBAGE_TYPE` (14): a `COLORS` entry with no `PIECES` entry. Tint never targets them.
 - **Hold:** `hold` stores `{ type, power }` (not a bare type) so power-ups survive a hold. `holdUsed` is reset in `lockPiece()`, not `spawn()`, because `holdPiece()` also calls `spawn()`. A piece out of hold is rebuilt with `createPiece()` (spawn position/rotation).
 - **T-spin flag:** `lastMoveRotate` is set by a successful rotation and cleared by any lateral move, gravity/soft-drop step, or a hard drop that descends ≥1 row.

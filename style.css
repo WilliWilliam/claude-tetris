@@ -99,6 +99,29 @@ body {
   transition: background 0.15s, border-color 0.15s;
 }
 
+#skin-select {
+  background: var(--toggle-bg);
+  border: 1px solid var(--toggle-border);
+  border-radius: 999px;
+  color: var(--text);
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Skin overrides (after the theme palettes so they win). Skins not listed
+   here keep the light/dark theme's board background and grid. */
+body[data-skin="neon"] {
+  --board-bg: #000000;
+  --board-border: #1f1f3a;
+  --grid-color: #0d0d1c;
+}
+
+body[data-skin="neon"] #board {
+  box-shadow: 0 0 40px rgba(0, 245, 255, 0.25);
+}
+
 .game-container {
   display: flex;
   gap: 20px;

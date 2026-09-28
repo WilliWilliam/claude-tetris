@@ -1,7 +1,7 @@
 'use strict';
 
-// Depends on pieces.js, audio.js, scoring.js, powerups.js, modes.js and
-// abilities.js (loaded first by index.html).
+// Depends on pieces.js, skins.js, audio.js, scoring.js, powerups.js, modes.js
+// and abilities.js (loaded first by index.html).
 
 const POPUP_MS = 1200;
 const FLASH_MS = 600;
@@ -42,6 +42,7 @@ const pauseList = document.getElementById('pause-list');
 const pauseControls = document.getElementById('pause-controls');
 const themeToggleBtn = document.getElementById('theme-toggle');
 const soundToggleBtn = document.getElementById('sound-toggle');
+const skinSelect = document.getElementById('skin-select');
 
 const THEME_KEY = 'tetris-theme';
 const START_LEVEL_KEY = 'tetris-start-level';
@@ -56,6 +57,7 @@ let inputBlockedUntil = 0;
 const heldKeys = new Set(), staleKeys = new Set();
 let levelValueEl, levelDescEl;
 let gridColor;
+let skin = loadSkin();
 
 function readGridColor() {
   gridColor = getComputedStyle(document.body).getPropertyValue('--grid-color').trim();
@@ -66,11 +68,24 @@ function applyTheme(theme) {
   localStorage.setItem(THEME_KEY, theme);
   themeToggleBtn.textContent = theme === 'light' ? '☀️' : '🌙';
   readGridColor();
-  if (board) {
-    draw();
-    drawNext();
-    drawHold();
-  }
+  redrawAll();
+}
+
+function redrawAll() {
+  if (!board) return; // no game yet (mode menu still open)
+  draw();
+  drawNext();
+  drawHold();
+}
+
+// Skin: sets data-skin (CSS may override board bg / grid) and redraws.
+function applySkin(id) {
+  skin = isSkin(id) ? id : DEFAULT_SKIN;
+  document.body.dataset.skin = skin;
+  skinSelect.value = skin;
+  saveSkin(skin);
+  readGridColor();
+  redrawAll();
 }
 
 function toggleTheme() {
@@ -454,13 +469,9 @@ function showPopups(labels) {
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
+  const s = SKINS[skin];
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  s.draw(context, x * size, y * size, size, s.colors[colorIndex]);
   context.globalAlpha = 1;
 }
 
@@ -941,6 +952,9 @@ modeBtn.addEventListener('click', () => { modeBtn.blur(); showModeMenu(); });
 // blur so a focused button doesn't also react to Space (hard drop)
 themeToggleBtn.addEventListener('click', () => { toggleTheme(); themeToggleBtn.blur(); });
 soundToggleBtn.addEventListener('click', () => { toggleSound(); soundToggleBtn.blur(); });
+SKIN_ORDER.forEach(id => skinSelect.add(new Option(SKINS[id].name, id)));
+skinSelect.addEventListener('change', () => { applySkin(skinSelect.value); skinSelect.blur(); });
+applySkin(skin);
 themeToggleBtn.textContent = document.body.dataset.theme === 'light' ? '☀️' : '🌙';
 updateSoundButton();
 

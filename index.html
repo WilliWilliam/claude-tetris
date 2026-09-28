@@ -9,12 +9,15 @@
 <body>
   <script>
     document.body.dataset.theme = localStorage.getItem('tetris-theme') || 'dark';
+    // skin set early so the board background doesn't flash; skins.js validates it
+    try { document.body.dataset.skin = localStorage.getItem('tetris-skin') || 'retro'; } catch {}
   </script>
   <div class="wrapper">
     <div class="header-row">
       <h1 class="game-title">TETRIS</h1>
       <button id="theme-toggle" type="button" aria-label="Cambiar tema" title="Cambiar entre modo claro y oscuro">🌙</button>
       <button id="sound-toggle" type="button" aria-label="Silenciar sonido" title="Activar o silenciar el sonido">🔊</button>
+      <select id="skin-select" aria-label="Skin visual" title="Cambiar la apariencia de los bloques"></select>
     </div>
     <div class="game-container">
       <aside class="panel panel-left">
@@ -126,6 +129,7 @@
   </div>
 
   <script src="pieces.js"></script>
+  <script src="skins.js"></script>
   <script src="audio.js"></script>
   <script src="scoring.js"></script>
   <script src="powerups.js"></script>
